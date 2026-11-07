@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TotK Cook Helper</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="q1" clipPathUnits="userSpaceOnUse"><rect x="0" y="12" width="12" height="12"/></clipPath>
+    <clipPath id="q2" clipPathUnits="userSpaceOnUse"><rect x="0" y="0" width="12" height="24"/></clipPath>
+    <clipPath id="q3" clipPathUnits="userSpaceOnUse"><path d="M0 0h24v12H12v12H0z"/></clipPath>
+  </defs>
+</svg>
+
+<div class="frame" id="frame">
+  <header class="bar" id="bar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v2.5a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M2.5 11h19M9 5.5c0 1.2 1 1.6 1 2.8M13 4.5c0 1.3 1 1.7 1 3"/><path d="M8 19.5l-1 2M16 19.5l1 2"/></svg>
+      <span>Cook Helper</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Lists">
+      <span class="shoulder" aria-hidden="true">LB</span>
+      <button class="tab" role="tab" data-tab="dishes" id="tab-dishes">Dishes <span class="n" id="n-dishes"></span></button>
+      <button class="tab" role="tab" data-tab="materials" id="tab-materials">Materials <span class="n" id="n-materials"></span></button>
+      <span class="shoulder" aria-hidden="true">RB</span>
+    </nav>
+    <div class="winbtns">
+      <button class="wb" id="btn-settings" title="Settings" aria-label="Settings" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/></svg>
+      </button>
+      <button class="wb" id="btn-hide" title="Hide (Esc)" aria-label="Hide">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5h12"/></svg>
+      </button>
+      <button class="wb close" id="btn-close" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="body" id="body">
+    <section class="list" aria-label="Items">
+      <div class="searchrow">
+      <label class="filter">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+        <input id="filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter by name, effect or ingredient">
+        <kbd>/</kbd>
+      </label>
+      <div class="sort" id="sortbox" hidden></div>
+      </div>
+      <div class="tools" id="tools" hidden></div>
+      <div class="gridwrap" id="gridwrap">
+        <div class="grid" id="grid" role="listbox" tabindex="0" aria-label="Dishes"></div>
+      </div>
+    </section>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </main>
+
+  <section class="settings" id="settings" hidden></section>
+
+  <footer class="status">
+    <span id="save"></span>
+    <span class="hint" id="hint"></span>
+  </footer>
+
+  <div class="edge e-top" data-edge="top"></div>
+  <div class="edge e-bottom" data-edge="bottom"></div>
+  <div class="edge e-left" data-edge="left"></div>
+  <div class="edge e-right" data-edge="right"></div>
+  <div class="edge e-topleft" data-edge="topleft"></div>
+  <div class="edge e-topright" data-edge="topright"></div>
+  <div class="edge e-bottomleft" data-edge="bottomleft"></div>
+  <div class="edge e-bottomright" data-edge="bottomright"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

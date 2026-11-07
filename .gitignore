@@ -1,0 +1,20 @@
+# Built from your own copy of the game; never shared
+cookdata.json
+ui/icons/
+
+# Per-machine state
+settings.json
+*.log
+__pycache__/
+
+# Build outputs; the prebuilt SDL3.dll ships as a release download
+padblock/SDL3.dll
+padblock/padblock.def
+padblock/*.obj
+padblock/*.lib
+padblock/*.exp
+
+# Local design notes
+.impeccable/
+PRODUCT.md
+DESIGN.md
