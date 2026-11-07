@@ -65,7 +65,7 @@ To update, run `git pull` in the `cook-helper` folder.
 | Cycle the effect filter | Y | F |
 | Cycle the sort order | X | S |
 | Search | | `/` or Ctrl+F |
-| Clear search, then hide | B | Esc |
+| Hide | B | Esc (clears the search first) |
 
 The combo, hotkey and hold time can be changed under the gear button. Other options there are always on top,
 minimize or fully hide, take focus when shown, start hidden and which monitor to use. Settings are saved in
