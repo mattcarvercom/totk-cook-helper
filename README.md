@@ -55,6 +55,48 @@ Run these in Command Prompt. Replace `C:\Games\TotK` with the folder that holds 
 
 To update, run `git pull` in the `cook-helper` folder.
 
+## Linux (save mode)
+
+The Linux helper reads the newest save file. It does not read game memory, block
+controller input, or register a global hotkey. Leave it open while playing and it
+refreshes when the game saves. It needs Python 3.12+ and pywebview with a GTK
+WebKit2 backend.
+
+System packages:
+
+- Arch: `python-gobject`, `webkit2gtk-4.1`
+- Ubuntu/Debian: `python3-gi`, `gir1.2-webkit2-4.1`
+
+From the helper folder:
+
+```bash
+python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+pip install -r requirements-linux.txt
+python build_data.py /path/to/TotK
+python build_icons.py /path/to/TotK
+./totk-cook-helper.sh --game /path/to/TotK --poll 15
+```
+
+`/path/to/TotK` is the recomp install folder, the one with `romfs/` and `profile/`.
+Pass it with `--game`; without `--game`, the helper looks for `../game`.
+The data and icon builds read your own game files and write `cookdata.json` and
+`ui/icons/`, both gitignored. `python cook_helper_linux.py --check` prints the
+save slot, material count, and dish count without opening the window.
+
+`--poll N` sets the scan interval in seconds (default 15). The status line shows a
+spinner while a save is being read, the slot it loaded, how long ago it was saved,
+and the countdown to the next scan. Icons are preloaded after the first payload,
+so later refreshes reuse them. The controller-only LB/RB pills are hidden.
+
+A save refresh keeps the selected tab, search, effect and sort filters, selected
+recipe and scroll position. If the selected recipe is no longer craftable, it
+stays in the detail pane, dimmed, with the missing ingredients listed. Pick
+another recipe or gather the ingredients again.
+
+This mode has no controller combo and no global hotkey. Use the window's own
+minimize and close buttons.
+
 ## Controls
 
 | Action | Controller | Keyboard |

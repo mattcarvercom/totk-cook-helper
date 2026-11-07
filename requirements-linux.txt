@@ -1,0 +1,5 @@
+# Linux save-mode helper
+pywebview
+pillow
+texture2ddecoder
+backports.zstd; python_version < "3.14"

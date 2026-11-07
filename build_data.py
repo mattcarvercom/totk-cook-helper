@@ -6,7 +6,10 @@ import json
 import os
 import sys
 
-from backports import zstd
+try:
+    from compression import zstd  # Python 3.14+
+except ImportError:
+    from backports import zstd
 
 import byml
 import msbt

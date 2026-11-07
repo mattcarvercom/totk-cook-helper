@@ -93,6 +93,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round
   border: 1px solid var(--line); border-radius: 9px; color: var(--faint);
   font: 500 11px/1 var(--ui); letter-spacing: 0.04em;
 }
+
+[data-platform="linux"] .shoulder { display: none; }
 .winbtns { justify-self: end; display: flex; gap: 2px; }
 .wb { width: 34px; height: 30px; border-radius: 6px; display: grid; place-items: center; color: var(--dim); transition: background 140ms, color 140ms; }
 .wb svg { width: 18px; height: 18px; stroke-width: 1.5; }
@@ -122,10 +124,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round
 .tools { display: flex; margin: -2px 14px 10px 0; min-width: 0; }
 .tools[hidden] { display: none; }
 .chips {
-  flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 1px 0;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; padding: 1px 0;
 }
-.chips::-webkit-scrollbar { display: none; }
 .fxchip {
   flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 14px;
   border: 1px solid var(--line-soft); background: linear-gradient(var(--cell-deep), #0e1513);
@@ -215,6 +215,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round
   background: linear-gradient(180deg, transparent, var(--line) 15%, var(--line) 85%, transparent);
 }
 .detail .in { animation: fade 180ms var(--ease); }
+.detail.stale .in { opacity: 0.55; filter: saturate(0.6); }
+.detail .missing {
+  margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: rgba(214, 196, 140, 0.09); color: var(--gold); font-size: 13.5px; line-height: 1.4;
+}
+.detail .missing b { display: block; margin-bottom: 2px; color: var(--gold-hi); font-weight: 500; }
+.detail .pot li.miss .pn, .detail .pot li.miss .pc { color: var(--danger); }
 @keyframes fade { from { opacity: 0.35; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 .d-name { margin: 0 0 4px; font: 500 23px/1.12 var(--ui); color: var(--gold-hi); letter-spacing: 0.005em; text-wrap: balance; }
 .d-sub { color: var(--dim); font-size: 14px; margin-bottom: 14px; }
@@ -305,6 +312,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round
 .status .warn { color: var(--gold); }
 .status .live { color: var(--gold-hi); }
 .status .live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--gold-hi); box-shadow: 0 0 6px rgba(255, 232, 170, 0.6); vertical-align: middle; }
+.status .spin { display: inline-block; width: 10px; height: 10px; margin: 0 6px 1px 0; border: 2px solid var(--line); border-top-color: var(--gold-hi); border-radius: 50%; animation: cook-spin .8s linear infinite; vertical-align: -1px; }
+@keyframes cook-spin { to { transform: rotate(360deg); } }
 
 /* ---------- resize edges ---------- */
 .edge { position: absolute; z-index: 5; }

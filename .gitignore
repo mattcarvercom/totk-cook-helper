@@ -6,6 +6,7 @@ ui/icons/
 settings.json
 *.log
 __pycache__/
+.venv/
 
 # Build outputs; the prebuilt SDL3.dll ships as a release download
 padblock/SDL3.dll

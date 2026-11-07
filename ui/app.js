@@ -54,7 +54,7 @@ const PAD = [
 const PAD_SHORT = { lstick: 'LS', rstick: 'RS', back: 'View', start: 'Menu', dpad_up: 'Up', dpad_down: 'Down', dpad_left: 'Left', dpad_right: 'Right' };
 
 const S = {
-  version: -1, d: null, tab: 'dishes', sel: { dishes: null, materials: null }, filter: '',
+  version: -1, d: null, tab: 'dishes', sel: { dishes: null, materials: null }, lastDetail: { dishes: null, materials: null }, filter: '',
   settings: false, editCombo: false, capturing: false, booted: false,
 };
 const $ = (q) => document.querySelector(q);
@@ -215,31 +215,62 @@ function cellHTML(it, isSel) {
   return `<button class="cell${dim}" role="option" ${sel} data-id="${esc(it.id)}" aria-label="${esc(it.name)}, ${it.count}">${sigil(it.effect)}<span class="badge count">×${it.count}</span>${art(it)}<span class="nm">${esc(it.name)}</span></button>`;
 }
 
-function renderGrid(snap) {
+function staleInfo(it) {
+  if (!it) return null;
+  if (S.tab === 'materials') return { text: 'This material is no longer in your pouch.', missing: [] };
+  const have = new Map((S.d && S.d.materials ? S.d.materials : []).map((m) => [m.id, m.count]));
+  const missing = it.pot
+    .map((p) => ({ actor: p.actor, name: p.name, need: p.n, have: have.get(p.actor) || 0 }))
+    .filter((p) => p.have < p.need);
+  return {
+    text: missing.length ? 'Not enough materials for this recipe after the last save.'
+      : 'This recipe is no longer available with the current pouch.',
+    missing,
+  };
+}
+
+function renderGrid(snap, keepScroll = false) {
   renderTools();
   const grid = $('#grid');
-  const list = items();
+  const wrap = $('#gridwrap');
+  const scroll = keepScroll ? wrap.scrollTop : 0;
   if (!S.d) {
     grid.innerHTML = `<div class="empty"><b>Reading your save</b>The list fills in a moment after the helper finds it.</div>`;
     renderDetail(null);
+    wrap.scrollTop = scroll;
     return;
   }
+  const list = items();
+  const wanted = S.sel[S.tab];
+  const available = S.tab === 'dishes' ? S.d.dishes : S.d.materials;
+  const visible = wanted ? list.find((x) => x.id === wanted) : null;
+  const existing = wanted ? available.find((x) => x.id === wanted) : null;
+  let chosen = visible;
+
   if (!list.length) {
     let msg;
     if (S.filter.trim()) msg = `<b>Nothing matches "${esc(S.filter.trim())}"</b>Clear the filter with Esc${S.tab === 'dishes' && activeEffect() ? ', or pick All above' : ''}.`;
     else if (S.tab === 'dishes') msg = '<b>Nothing to cook yet</b>The pouch holds no combination that makes a dish. Meat, fish, fruit and mushrooms are the usual start.';
     else msg = '<b>The material pouch is empty</b>It fills in after the game saves with materials in it.';
     grid.innerHTML = `<div class="empty">${msg}</div>`;
-    renderDetail(null);
-    return;
+  } else {
+    if (!chosen && !wanted) {
+      chosen = list[0];
+      S.sel[S.tab] = chosen.id;
+    }
+    grid.innerHTML = list.map((it) => cellHTML(it, chosen && it.id === chosen.id)).join('') + '<div class="cursor snap" id="cursor"></div>';
+    placeCursor(true);
   }
-  const cur = selected(list);
-  S.sel[S.tab] = cur.id;
-  grid.innerHTML = list.map((it) => cellHTML(it, it.id === cur.id)).join('') + '<div class="cursor snap" id="cursor"></div>';
-  placeCursor(true);
-  renderDetail(cur);
-}
 
+  if (chosen) renderDetail(chosen);
+  else if (existing) renderDetail(existing);
+  else if (wanted) {
+    const stale = S.lastDetail[S.tab];
+    if (stale && stale.id === wanted) renderDetail(stale, staleInfo(stale));
+    else renderDetail(null);
+  } else renderDetail(null);
+  wrap.scrollTop = scroll;
+}
 function placeCursor(snap) {
   const c = $('#cursor');
   const cell = $('#grid .cell[aria-selected="true"]');
@@ -261,9 +292,20 @@ function select(id, scroll = true) {
   renderDetail(selected());
 }
 
-function renderDetail(it) {
+function renderDetail(it, stale = null) {
   const el = $('#detail');
+  el.classList.toggle('stale', !!stale);
   if (!it) { el.innerHTML = ''; return; }
+  if (!stale) S.lastDetail[S.tab] = it;
+  let banner = '';
+  const missingActors = new Set();
+  if (stale) {
+    if (stale.missing) for (const m of stale.missing) missingActors.add(m.actor);
+    const detail = stale.missing && stale.missing.length
+      ? ` Missing: ${stale.missing.map((m) => `${esc(m.name)} (need ${m.need}, have ${m.have})`).join(', ')}.`
+      : '';
+    banner = `<div class="missing"><b>${esc(stale.text)}</b>${detail}</div>`;
+  }
   if (S.tab === 'dishes') {
     let h;
     if (it.extra) {
@@ -279,8 +321,8 @@ function renderDetail(it) {
     } else if (it.mixed) {
       fx = `<div class="effect none">Mixed effects cancel out, so this cooks with none.</div>`;
     } else fx = it.effect === 'LifeMaxUp' ? '' : `<div class="effect none">No effect</div>`;
-    const pot = it.pot.map((p) => `<li><button data-mat="${esc(p.actor)}" aria-label="${esc(p.name)} ×${p.n}, show in Materials"><span class="mini">${art(p, 'i')}</span><span class="pn">${esc(p.name)}</span><span class="pc">×${p.n}</span></button></li>`).join('');
-    el.innerHTML = `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">${plural(it.size, 'ingredient', 'ingredients')}</div></div></div>${h}${fx}<div class="ornament"></div><h3 class="label">In the pot</h3><ul class="pot">${pot}</ul><p class="note">An estimate. A critical cook can add hearts or time.</p></div>`;
+    const pot = it.pot.map((p) => `<li${missingActors.has(p.actor) ? ' class="miss"' : ''}><button data-mat="${esc(p.actor)}" aria-label="${esc(p.name)} ×${p.n}, show in Materials"><span class="mini">${art(p, 'i')}</span><span class="pn">${esc(p.name)}</span><span class="pc">×${p.n}</span></button></li>`).join('');
+    el.innerHTML = banner + `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">${plural(it.size, 'ingredient', 'ingredients')}</div></div></div>${h}${fx}<div class="ornament"></div><h3 class="label">In the pot</h3><ul class="pot">${pot}</ul><p class="note">An estimate. A critical cook can add hearts or time.</p></div>`;
   } else {
     const kinds = it.kinds.length ? esc(it.kinds.join(', ')) : 'Not used in cooking';
     const fx = it.effect_name ? `<div class="effect">${sigil(it.effect)}<span>${esc(it.effect_name)}</span></div>` : '';
@@ -288,7 +330,7 @@ function renderDetail(it) {
     const used = it.used_in.length
       ? `<div class="used">${it.used_in.map((u) => `<button data-dish="${esc(u.id)}">${esc(u.name)}</button>`).join('')}</div>`
       : `<p class="note">None of the dishes on the list use it right now.</p>`;
-    el.innerHTML = `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">You have ${it.count}</div></div></div><dl class="kv"><dt>Kind</dt><dd>${kinds}</dd></dl>${h}${fx}<div class="ornament"></div><h3 class="label">Used in</h3>${used}</div>`;
+    el.innerHTML = banner + `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">You have ${it.count}</div></div></div><dl class="kv"><dt>Kind</dt><dd>${kinds}</dd></dl>${h}${fx}<div class="ornament"></div><h3 class="label">Used in</h3>${used}</div>`;
   }
 }
 
@@ -303,6 +345,20 @@ function renderStatus() {
   const el = $('#save');
   if (!S.d) { el.textContent = 'Looking for a save'; return; }
   const sv = S.d.save;
+  if (S.d.platform === 'linux') {
+    const next = sv.next_scan ? Math.max(0, Math.ceil(sv.next_scan - Date.now() / 1000)) : null;
+    const slot = sv.slot ? sv.slot.replace('_', ' ') : null;
+    let text;
+    if (sv.checking) text = '<span class="spin"></span>Scanning save…';
+    else if (sv.error === 'nosave') text = '<span class="warn">No save yet.</span> Save once in the game and the list fills in.';
+    else if (sv.error && slot) text = `${esc(slot)}, saved ${ago(sv.mtime)} <span class="warn">· the game is writing a new save</span>`;
+    else if (sv.error) text = '<span class="warn">The game is writing the save. Trying again.</span>';
+    else text = `${esc(slot)}, saved ${ago(sv.mtime)}`;
+    if (next !== null) text += ` · next check in ${next}s`;
+    el.innerHTML = text;
+    $('#hint').textContent = 'Save mode · reads the newest save';
+    return;
+  }
   if (sv.error === 'nosave') el.innerHTML = '<span class="warn">No save yet. Save once in the game and the list fills in.</span>';
   else if (sv.error && sv.slot) el.innerHTML = `${esc(sv.slot.replace('_', ' '))}, saved ${ago(sv.mtime)} <span class="warn">· the game is writing a new save</span>`;
   else if (sv.error) el.innerHTML = '<span class="warn">The game is writing the save. Trying again.</span>';
@@ -310,6 +366,7 @@ function renderStatus() {
   else if (sv.live === 'scanning') el.textContent = `${sv.slot.replace('_', ' ')}, saved ${ago(sv.mtime)} · finding the pouch in the game`;
   else el.textContent = `${sv.slot.replace('_', ' ')}, saved ${ago(sv.mtime)}`;
   const st = S.d.settings;
+  if (S.d.platform === 'linux') { $('#hint').textContent = 'Save mode · reads the newest save'; return; }
   const parts = [];
   if (st.combo && st.combo.length) parts.push(comboHTML(st.combo));
   if (st.hotkey) parts.push(`<span class="chip">${esc(keyLabel(st.hotkey))}</span>`);
@@ -333,17 +390,17 @@ function renderSettings() {
   const el = $('#settings');
   if (!S.settings || !S.d) return;
   const st = S.d.settings, pad = S.d.pad;
-  const padState = !pad.available ? '<span class="s warn">XInput is not available on this PC.</span>'
+  const linux = S.d.platform === 'linux';
+  const padState = !pad.available ? '<span class="s warn">Controller input is not available in this build.</span>'
     : pad.connected ? `<span class="s">${plural(pad.connected, 'controller', 'controllers')} connected. Xbox pads, and others mapped through Steam Input.</span>`
       : '<span class="s warn">No XInput controller found. Xbox pads work directly; PlayStation and Switch pads need Steam Input.</span>';
   const rec = pad.recording;
   const padgrid = S.editCombo ? `<div class="padgrid">${PAD.map(([k, l]) => `<button data-padbtn="${k}" aria-pressed="${st.combo.includes(k)}">${l}</button>`).join('')}</div>` : '';
   const single = st.combo.length === 1 && st.combo[0] !== 'guide';
-  el.innerHTML = `
-  <h2>Settings</h2>
-  <div class="cols">
-    <section>
-      <h3 class="label">Show and hide</h3>
+  const showHide = linux ? `
+      <div class="row stack">
+        <span class="s">Linux save mode reads the newest save every couple of seconds. The controller combo, keyboard hotkey, live memory and controller navigation are not available here; use the window controls.</span>
+      </div>` : `
       <div class="row stack">
         <span class="t">Controller combo</span>
         <div class="combo">${comboHTML(st.combo)}
@@ -365,15 +422,23 @@ function renderSettings() {
       <div class="row"><span class="t">When hidden</span>${seg('hide_mode', st.hide_mode, [['minimize', 'Minimize'], ['hide', 'Hide fully']])}
         <span class="s">${st.hide_mode === 'minimize' ? 'Stays in Alt-Tab and the taskbar, so Alt-Tab also brings it back.' : 'Gone from Alt-Tab and the taskbar until the combo or hotkey shows it.'}</span></div>
       <div class="row"><span class="t">Take focus when shown</span>${sw('take_focus', st.take_focus)}
-        <span class="s">Off keeps the game in control while the helper is up. On lets you type in the filter straight away.</span></div>
+        <span class="s">Off keeps the game in control while the helper is up. On lets you type in the filter straight away.</span></div>`;
+  const windowExtra = linux ? '' : `
+      <div class="row stack"><span class="t">Monitor</span>${monitorsHTML(S.d.monitors, S.d.monitor)}<span class="s">Click a screen to move the helper there. Drag the top bar to place it anywhere; it remembers where you left it.</span></div>
+      <div class="row"><span class="t">Start hidden</span>${sw('start_hidden', st.start_hidden)}<span class="s">Opens minimized when the game starts, ready for the combo.</span></div>
+      <h3 class="label" style="margin-top:22px">Controller in the helper</h3>
+      <div class="row"><span class="t">Navigate with the pad</span>${sw('pad_nav', st.pad_nav)}<span class="s">While the helper has focus: D-pad moves the cursor, LB and RB switch lists, Y and X step through the dish effects and sort orders, B hides it.</span></div>`;
+  el.innerHTML = `
+  <h2>Settings</h2>
+  <div class="cols">
+    <section>
+      <h3 class="label">Show and hide</h3>
+      ${showHide}
     </section>
     <section>
       <h3 class="label">Window</h3>
       <div class="row"><span class="t">Always on top</span>${sw('on_top', st.on_top)}<span class="s">Keeps it over the game in borderless fullscreen.</span></div>
-      <div class="row stack"><span class="t">Monitor</span>${monitorsHTML(S.d.monitors, S.d.monitor)}<span class="s">Click a screen to move the helper there. Drag the top bar to place it anywhere; it remembers where you left it.</span></div>
-      <div class="row"><span class="t">Start hidden</span>${sw('start_hidden', st.start_hidden)}<span class="s">Opens minimized when the game starts, ready for the combo.</span></div>
-      <h3 class="label" style="margin-top:22px">Controller in the helper</h3>
-      <div class="row"><span class="t">Navigate with the pad</span>${sw('pad_nav', st.pad_nav)}<span class="s">While the helper has focus: D-pad moves the cursor, LB and RB switch lists, Y and X step through the dish effects and sort orders, B hides it.</span></div>
+      ${windowExtra}
     </section>
   </div>`;
 }
@@ -452,7 +517,7 @@ document.addEventListener('keydown', (e) => {
     if (inFilter && S.filter) { $('#filter').value = ''; S.filter = ''; renderGrid(true); }
     else if (inFilter) $('#filter').blur();
     else if (S.settings) openSettings(false);
-    else call('hide');
+    else if (!S.d || S.d.platform !== 'linux') call('hide');
     return;
   }
   if ((e.key === '/' && !inFilter) || (e.ctrlKey && e.key.toLowerCase() === 'f')) { e.preventDefault(); $('#filter').focus(); $('#filter').select(); return; }
@@ -507,22 +572,45 @@ document.addEventListener('mousedown', (e) => {
 
 window.addEventListener('resize', () => placeCursor(true));
 
+/* ---------- icon cache and polling ---------- */
+const ICON_CACHE = new Map();
+function preloadIcons(p) {
+  const urls = new Set();
+  for (const item of [...p.dishes, ...p.materials]) {
+    if (item.icon) urls.add('icons/' + encodeURIComponent(item.icon));
+  }
+  for (const url of urls) {
+    if (ICON_CACHE.has(url)) continue;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    ICON_CACHE.set(url, img);
+  }
+}
+
 /* ---------- poll Python for state ---------- */
 async function poll() {
   try {
     const p = await call('state', S.version);
     if (p) {
       const first = !S.d;
+      const newData = p.data_version === undefined || p.data_version !== S.dataVersion;
       S.version = p.version; S.d = p;
       if (first && p.settings.tab) S.tab = p.settings.tab;
+      if (p.platform) document.documentElement.dataset.platform = p.platform;
+      if (p.platform === 'linux') {
+        const hb = $('#btn-hide');
+        if (hb) { hb.title = 'Minimize'; hb.setAttribute('aria-label', 'Minimize'); }
+      }
+      preloadIcons(p);
       renderTabs(); renderStatus();
-      if (S.settings) { if (!S.capturing) renderSettings(); }
-      renderGrid(true);
+      if (newData && S.settings && !S.capturing) renderSettings();
+      if (newData) { S.dataVersion = p.data_version; renderGrid(true, true); }
     }
   } catch (err) { /* the window is closing */ }
   setTimeout(poll, 500);
 }
-setInterval(renderStatus, 20000);
+setInterval(renderStatus, 500);
 renderTabs(); renderGrid(true);
 window.addEventListener('pywebviewready', () => { if (!S.booted) { S.booted = true; poll(); } });
 if (window.pywebview && window.pywebview.api) { S.booted = true; poll(); }
