@@ -86,6 +86,22 @@ To remove auto-start, run `py -3 install_autostart.py remove`.
 
 Run `py -3 build_data.py` and `py -3 build_icons.py` again only if the game's romfs changes.
 
+## Virus scans
+
+Scanned on 6 November 2026.
+
+| File | VirusTotal | Windows Defender |
+| --- | --- | --- |
+| Source, [v1.0.0.zip](https://github.com/shin2344234/totk-cook-helper/archive/refs/tags/v1.0.0.zip) | [No detections](https://www.virustotal.com/gui/file/841b81b16123105e28253b13b4c635c0ba11e045f8d6ab89579aaa4dc684ea8b) | No threats |
+| [SDL3.dll](https://github.com/shin2344234/totk-cook-helper/releases/download/v1.0.0/SDL3.dll) from the release | [1 of 71](https://www.virustotal.com/gui/file/c8c1e6227635240bd2ac916dc8bf89525a4061dc236cd269e73df40588bb0bd1) | No threats |
+
+The one detection is Cynet's machine-learning score. A DLL that takes the place of another and forwards its functions
+to the renamed original matches what Cynet's model looks for, and that is exactly how the controller block works.
+Every other engine reports it clean. The source is `padblock\padblock.c`, and `py -3 padblock\padblock.py build`
+compiles it yourself if you'd rather not use the download.
+
+SHA-256 of `SDL3.dll`: `c8c1e6227635240bd2ac916dc8bf89525a4061dc236cd269e73df40588bb0bd1`
+
 ## Limits
 
 Hearts and durations are estimates. Critical cooks, Monster Extract and effect levels are not modelled. A port update
