@@ -1152,6 +1152,40 @@ function armorPieces() {
     a.name.localeCompare(b.name));
 }
 
+function rankDefense(piece, rank) {
+  const rows = piece.ranks || [];
+  if (!rows.length) return 0;
+  const exact = rows.find((r) => r.rank === rank);
+  if (exact) return exact.defense || 0;
+  const top = rows[rows.length - 1];
+  return top ? (top.defense || 0) : 0;
+}
+
+function setDefense(pieces, mode) {
+  return pieces.reduce((n, x) => {
+    if (mode === 'now') return n + (x.owned ? (x.current.defense || 0) : 0);
+    if (mode === 'lv2') return n + rankDefense(x, SET_BONUS_LEVEL);
+    return n + rankDefense(x, x.maxRank || 1);
+  }, 0);
+}
+
+// Piece effects stack across the set; upgrades do not change them.
+function fullSetEffects(pieces) {
+  const totals = new Map();
+  for (const piece of pieces) {
+    const row = (piece.ranks || [])[0];
+    for (const fx of (row && row.effect_info) || []) {
+      const cur = totals.get(fx.type) || { type: fx.type, name: fx.name, level: 0, pieces: 0 };
+      cur.level += Math.max(1, fx.level || 1);
+      cur.pieces += 1;
+      totals.set(fx.type, cur);
+    }
+  }
+  return [...totals.values()]
+    .filter((x) => x.pieces > 1)
+    .map((x) => ({ ...x, level: Math.min(EFFECT_MAX_LEVEL[x.type] || 3, x.level) }));
+}
+
 function armorCell(p, selected) {
   const owned = !!p.owned;
   const lvl = owned ? (p.owned.rank || 1) : 0;
@@ -1303,7 +1337,7 @@ function renderArmorDetail(p) {
 
   const effects = current.effect_info || [];
   const effectBlock = effects.length
-    ? `<h3 class="label">Effect</h3><div class="tagrow">${effectChips(effects, 'eff')}</div>` +
+    ? `<h3 class="label">Piece effect</h3><div class="tagrow">${effectChips(effects, 'eff')}</div>` +
       effectNotes(effects)
     : '';
 
@@ -1317,21 +1351,60 @@ function renderArmorDetail(p) {
   const allOwned = setPieces.every((x) => x.owned);
   const multiPiece = setPieces.length > 1;
   const bonusReady = bonus.length > 0 && allOwned && minRank >= SET_BONUS_LEVEL;
-  const pieceChips = setPieces.map((x) =>
-    `<button class="setpiece-chip" data-armor="${esc(x.base)}"><span>${slotLabel(x.slot)}</span>` +
-    `<b class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</b></button>`
-  ).join('');
-  const bonusBlock = bonus.length
-    ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Needs all ${setPieces.length} at Lv ${SET_BONUS_LEVEL}+`}</span>` +
-      `<span class="bonus-fx">${esc(bonus.map((x) => x.name).join(', '))}</span>` +
-      `<span class="bonus-desc">${esc(bonus.map((x) => effectDesc(x)).filter(Boolean).join(' '))}</span></div>`
+  const lowPieces = setPieces.filter((x) => !x.owned || (x.owned.rank || 1) < SET_BONUS_LEVEL);
+  const pieceChips = setPieces.map((x) => {
+    const lvl = x.owned ? (x.owned.rank || 1) : 0;
+    const cls = !x.owned ? 'no' : lvl < SET_BONUS_LEVEL ? 'low' : 'ok';
+    const tip = !x.owned ? `${x.name} is not owned`
+      : lvl < SET_BONUS_LEVEL ? `${x.name} is Lv ${lvl}; Lv ${SET_BONUS_LEVEL} unlocks the set bonus`
+      : `${x.name} is Lv ${lvl}`;
+    return `<button class="setpiece-chip" data-armor="${esc(x.base)}" title="${esc(tip)}"><span>${slotLabel(x.slot)}</span>` +
+      `<b class="${cls}">${x.owned ? `Lv ${lvl}` : 'Not owned'}</b></button>`;
+  }).join('');
+  const defNow = setDefense(setPieces, 'now');
+  const defLv2 = setDefense(setPieces, 'lv2');
+  const defMax = setDefense(setPieces, 'max');
+  const nowNote = !ownedPieces.length || allOwned ? '' : ', owned only';
+  const stacked = fullSetEffects(setPieces);
+  const stackLine = (multiPiece && stacked.length)
+    ? `<div class="set-effects"><span class="lab" title="Piece effects stack as you wear more pieces of the set. Upgrading a piece adds defense, not effect levels.">Full set</span>` +
+      stacked.map((x) => {
+        const amount = effectAmount(x.type, x.level);
+        return `<span class="set-effect"><b>${esc(x.name)}${x.level > 1 ? ` Lv. ${x.level}` : ''}</b>${amount ? `: ${esc(amount)}` : ''}</span>`;
+      }).join('') + `</div>`
     : '';
+  const bonusItems = bonus.map((x) => {
+    const level = Math.max(1, x.level || 1);
+    const detail = effectAmount(x.type, level) || effectDesc(x);
+    return `<span class="bonus-item"><b>${esc(x.name)}</b>${detail ? `<span class="bd">: ${esc(detail)}</span>` : ''}</span>`;
+  }).join('');
+  const need = multiPiece
+    ? `All ${setPieces.length} pieces at Lv ${SET_BONUS_LEVEL} unlock the bonus`
+    : `Lv ${SET_BONUS_LEVEL} unlocks the bonus`;
+  let bonusWhy = '';
+  if (bonus.length) {
+    if (bonusReady) {
+      bonusWhy = `Unlocked at Lv ${SET_BONUS_LEVEL}. Lv 3 and higher add defense only; the bonus itself does not increase.`;
+    } else {
+      const lacking = lowPieces.map((x) => x.owned
+        ? `${slotLabel(x.slot)} Lv ${x.owned.rank || 1}`
+        : `${slotLabel(x.slot)} not owned`).join(', ');
+      bonusWhy = `${lacking}. ${need}; Lv 3 and higher add defense only.`;
+    }
+  } else if (multiPiece) {
+    bonusWhy = 'No set bonus. Upgrades add defense only.';
+  }
+  const bonusBlock = bonus.length
+    ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Unlocks at Lv ${SET_BONUS_LEVEL}`}</span>` +
+      `${bonusItems}<span class="bonus-why">${esc(bonusWhy)}</span></div>`
+    : (bonusWhy ? `<div class="bonus-line"><span class="bonus-why">${esc(bonusWhy)}</span></div>` : '');
   const setBlock = (multiPiece || bonus.length)
     ? `<h3 class="label">Set</h3><div class="setbox compact"><div class="set-head">` +
       `<span class="setname">${esc(p.set_name || 'Armor')}</span>` +
       `<span class="setpieces-inline">${pieceChips}</span></div>` +
-      bonusBlock +
-      (!bonusReady && multiPiece ? `<div class="dim small">${ownedPieces.length} of ${setPieces.length} pieces owned${allOwned ? `, lowest Lv ${minRank}` : ''}.</div>` : '') +
+      (multiPiece ? `<div class="set-def" title="Now counts owned pieces at their current level. Lv ${SET_BONUS_LEVEL} and max count all ${setPieces.length} pieces.">Defense <b>${defNow}</b> now${nowNote} · <b>${defLv2}</b> at all Lv ${SET_BONUS_LEVEL} · <b>${defMax}</b> at max</div>` : '') +
+      stackLine + bonusBlock +
+      (!allOwned ? `<div class="dim small">${ownedPieces.length} of ${setPieces.length} pieces owned.</div>` : '') +
       `</div>`
     : '';
 

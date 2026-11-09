@@ -174,9 +174,13 @@ Inventory opens on All, and category chips show their slot cap, such as
 Weapons 12/12 or Materials 137/255. Choosing an equipment category also shows
 the next Korok Seed cost, and the armor page shows owned pieces against its 150
 slots. Armor opens with Owned only; armor with elemental or gloom resistance
-shows the matching icon in its top-left corner. Weapons and shields show a
-fusion badge and the fused item in their details, including object fusions such
-as Rock. Weapons, bows, and shields with 3 or less durability pulse red.
+shows the matching icon in its top-left corner. The set panel shows the combined
+effect of wearing all pieces, the set's defense now, at Lv 2, and at max, and
+the set bonus with its measured value. Set bonuses unlock when every piece
+reaches Lv 2; Lv 3 and higher add defense only and do not strengthen the bonus.
+Weapons and shields show a fusion badge and the fused item in their details,
+including object fusions such as Rock. Weapons, bows, and shields with 3 or less durability
+pulse red.
 Cooking starts with dishes that the current pouch can make; **All recipes**
 adds the full recipe table with required ingredient slots and marks entries the
 pouch cannot cook yet. The dish detail shows the recovered portion of a stamina
