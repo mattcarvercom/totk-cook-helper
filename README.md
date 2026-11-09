@@ -133,7 +133,11 @@ position and distance from Link, or use **Near Link** to see the closest
 collectibles first. Show all or hide all marker categories from the sidebar.
 Completion lists every tracked category and can show only missing entries.
 The armor page shows every set, the owned level, and the materials needed for
-the next upgrade.
+the next upgrade. Upgrade materials and material details have a **Sources**
+action: it lists shops with prices and stock, enemy drops with their spawn
+counts, and world spawns, then can pin those places on the map. Shops come from
+the actor packs' ShopParam data, drops from the enemy DropTable and horn mapping
+data, and spawns from the Banc map placements, all from your own game files.
 
 Companion shortcuts: `/` focuses the active filter, `1` to `7` switch sections,
 `r` refreshes, and Esc clears a filter or closes settings. The save slot is

@@ -16,11 +16,14 @@ const S = {
   armor: { slot: '', owned: false, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'all', search: '', sel: null,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, iconImages: {},
+         sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
          miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'missing', filter: '' },
   comp: { group: '', state: '', filter: '', sel: null },
   cook: { filter: '', fx: '', sort: 'hearts', sel: null },
   modal: false,
+  sourceModal: false,
+  sourceActor: null,
 };
 
 /* Drawn glyphs, 24x24, one stroke weight. Original drawings, no game art. */
@@ -492,6 +495,11 @@ function renderInvDetail(it) {
       `<dt>Effect</dt><dd>${esc(it.effect_name || 'None')}</dd>` +
       `<dt>Kind</dt><dd>${esc((it.kinds || []).join(', ') || '—')}</dd>` +
       `<dt>Sell</dt><dd>${fmtNum(it.sell)} rupees</dd></div>`;
+    const src = (cat().material_sources || {})[it.actor];
+    if (src) {
+      body += `<div class="actions" style="margin-top:10px"><button class="btn" data-srcmat="${esc(it.actor)}">Sources</button>` +
+        `<span class="dimmed" style="align-self:center;font-size:12.5px">Buy, drop, and world-spawn locations</span></div>`;
+    }
     const used = ((dyn().cooking && dyn().cooking.dishes) || []).filter((d) => (d.pot || []).some((p) => p.actor === it.actor)).slice(0, 8);
     if (used.length) body += `<h3 class="label">Used in</h3><div class="used">` + used.map((d) => `<button data-cdish="${esc(d.id)}">${esc(d.name)}</button>`).join('') + `</div>`;
   } else {
@@ -512,6 +520,11 @@ function upgradeHTML(it) {
   const rows = next.map((u) => {
     const have = S.matCounts[u.actor] || 0;
     const meta = ainfo(u.actor);
+    if ((cat().material_sources || {})[u.actor]) {
+      return `<button class="u${have < u.n ? ' miss' : ''}" data-srcmat="${esc(u.actor)}" title="Where to find ${esc(meta.name || u.actor)}">` +
+        `${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span>` +
+        `<span class="src">Sources</span></button>`;
+    }
     return `<div class="u${have < u.n ? ' miss' : ''}">${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span></div>`;
   }).join('');
   return `<h3 class="label">Upgrade materials</h3><div class="upg">${rows}</div>` +
@@ -606,7 +619,9 @@ function renderArmorDetail(p) {
   const rows = upg.map((u) => {
     const have = S.matCounts[u.actor] || 0;
     const meta = ainfo(u.actor);
-    return `<div class="u${have < u.n ? ' miss' : ''}">${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span></div>`;
+    return `<button class="u${have < u.n ? ' miss' : ''}" data-srcmat="${esc(u.actor)}" title="Where to find ${esc(meta.name || u.actor)}">` +
+      `${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span>` +
+      `<span class="src">Sources</span></button>`;
   }).join('');
   let upgradeBlock;
   if (!next) upgradeBlock = `<p class="note">This is the final upgrade. Defense ${current.defense || 0}.</p>`;
@@ -621,6 +636,191 @@ function renderArmorDetail(p) {
     (current.caption ? `<p class="cap">${esc(current.caption)}</p>` : '') +
     `<div class="bar"><i style="width:${((p.owned ? p.owned.rank : 1) / 4) * 100}%"></i></div>` +
     upgradeBlock + `</div>`;
+}
+
+/* ------------------------------------------------------------------ sources */
+
+function sourcePoints(entry) {
+  if (!entry) return [];
+  const out = [];
+  for (const s of entry.sold || []) {
+    if (s.x === null || s.x === undefined) continue;
+    const price = s.currency === 'MinusRupee' ? `${fmtNum(s.price)} poes` : `${fmtNum(s.price)} rupees`;
+    const label = s.place ? `${s.shop} · ${s.place}` : s.shop;
+    out.push({ x: s.x, y: s.y, z: s.z, layer: s.layer, kind: 'buy', label: label,
+               meta: `${price}${s.stock ? ` · stock ${s.stock}` : ''}` });
+  }
+  for (const d of entry.dropped || []) {
+    for (const p of d.points || []) {
+      out.push({ x: p[0], y: p[1], z: p[2], layer: p[3], kind: 'drop', label: d.enemy,
+                 meta: `${Math.round(d.chance)}%${d.total ? ` · ${fmtNum(d.total)} spawns` : ''}` });
+    }
+  }
+  for (const f of entry.found || []) {
+    for (const p of f.points || []) {
+      out.push({ x: p[0], y: p[1], z: p[2], layer: p[3], kind: 'found', label: f.name,
+                 meta: `${fmtNum(f.total)} spots` });
+    }
+  }
+  return out;
+}
+
+function openSources(actor) {
+  const entry = (cat().material_sources || {})[actor];
+  if (!entry) return;
+  S.sourceActor = actor;
+  S.sourceModal = true;
+  S.modal = false;
+  $('#settings').hidden = true;
+  const el = $('#sources');
+  el.hidden = false;
+  renderSources();
+}
+
+function closeSources() {
+  S.sourceModal = false;
+  const el = $('#sources');
+  if (el) el.hidden = true;
+}
+
+function renderSources() {
+  const el = $('#sources');
+  const actor = S.sourceActor;
+  const entry = (cat().material_sources || {})[actor];
+  if (!entry) { el.innerHTML = ''; return; }
+  const p = playerPos();
+  const points = sourcePoints(entry);
+  const icon = entry.icon ? `<img src="companion_data/icons/${encodeURIComponent(entry.icon)}" alt="">` : '';
+  const used = (entry.used_in || []).length;
+  const rows = [];
+  for (const s of entry.sold || []) {
+    const d = s.x === null || s.x === undefined ? null : (p ? dist3(p, s) : null);
+    const price = s.currency === 'MinusRupee' ? `${fmtNum(s.price)} poes` : `${fmtNum(s.price)} rupees`;
+    const label = s.place ? `${s.shop} · ${s.place}` : s.shop;
+    rows.push(`<div class="src-row"><span class="tag buy">Buy</span><span class="srcl"><b>${esc(label)}</b>` +
+      `<span>${esc(price)}${s.stock ? ` · stock ${s.stock}` : ''}</span></span>` +
+      `<span class="srcd">${d === null ? '' : fmtDist(d)}</span>` +
+      (s.x === null ? '<span></span>' : `<button class="btn tiny" data-srcgroup="buy" data-srclabel="${esc(label)}">Map</button>`) + `</div>`);
+  }
+  for (const d of entry.dropped || []) {
+    let near = null;
+    for (const q of d.points || []) {
+      if (!p) break;
+      const dist = dist3(p, { x: q[0], y: q[1], z: q[2] });
+      if (near === null || dist < near) near = dist;
+    }
+    rows.push(`<div class="src-row"><span class="tag drop">Drop</span><span class="srcl"><b>${esc(d.enemy)}</b>` +
+      `<span>${Math.round(d.chance)}%${d.total ? ` · ${fmtNum(d.total)} spawns` : ''}</span></span>` +
+      `<span class="srcd">${near === null ? '' : fmtDist(near)}</span>` +
+      `<button class="btn tiny" data-srcgroup="drop" data-srclabel="${esc(d.enemy)}">Map</button></div>`);
+  }
+  for (const f of entry.found || []) {
+    let near = null;
+    for (const q of f.points || []) {
+      if (!p) break;
+      const dist = dist3(p, { x: q[0], y: q[1], z: q[2] });
+      if (near === null || dist < near) near = dist;
+    }
+    rows.push(`<div class="src-row"><span class="tag found">Find</span><span class="srcl"><b>${esc(f.name)}</b>` +
+      `<span>${fmtNum(f.total)} spots</span></span>` +
+      `<span class="srcd">${near === null ? '' : fmtDist(near)}</span>` +
+      `<button class="btn tiny" data-srcgroup="found">Map</button></div>`);
+  }
+  const notes = (entry.notes || []).map((n) => `<p class="src-note">${esc(n)}</p>`).join('');
+  el.innerHTML = `<div class="modal-card src-card">` +
+    `<div class="src-head">${icon}<div><h2>${esc(entry.name)}</h2>` +
+    `<div class="sub">Used in ${used} armor upgrade${used === 1 ? '' : 's'} · ${fmtNum(entry.need)} needed</div></div>` +
+    `<button class="btn" data-srcclose>Close</button></div>` +
+    `<div class="src-counts"><span><b>${(entry.sold || []).length}</b> ${(entry.sold || []).length === 1 ? 'shop' : 'shops'}</span>` +
+    `<span><b>${(entry.dropped || []).length}</b> ${(entry.dropped || []).length === 1 ? 'enemy type' : 'enemy types'}</span>` +
+    `<span><b>${(entry.found || []).reduce((n, f) => n + (f.total || 0), 0)}</b> world spots</span>` +
+    `<span><b>${points.length}</b> map pins</span></div>` +
+    (rows.length ? `<div class="src-list">${rows.join('')}</div>` : '') + notes +
+    `<div class="actions"><button class="btn" data-srcshow="all"${points.length ? '' : ' disabled'}>Show all on map</button>` +
+    `<button class="btn" data-srcshow="near"${points.length ? '' : ' disabled'}>Nearest on map</button></div></div>`;
+}
+
+function loadSourceIcon(actor) {
+  const entry = (cat().material_sources || {})[actor];
+  if (!entry || !entry.icon) return;
+  const key = 'source:' + actor;
+  if (S.map.iconImages[key]) return;
+  const img = new Image();
+  img.decoding = 'async';
+  img.onload = () => requestDraw();
+  img.src = 'companion_data/icons/' + encodeURIComponent(entry.icon);
+  S.map.iconImages[key] = img;
+}
+
+function showMaterialSources(actor, mode) {
+  const entry = (cat().material_sources || {})[actor];
+  if (!entry) return;
+  let points = sourcePoints(entry);
+  if (!points.length) return;
+  const p = playerPos();
+  if (p) points.sort((a, b) => dist3(p, a) - dist3(p, b));
+  const total = points.length;
+  if (mode === 'near') points = points.slice(0, 1);
+  else if (mode === 'one') points = points.slice(0, 1);
+  else points = points.slice(0, 600);
+  loadSourceIcon(actor);
+  S.map.sources = points;
+  S.map.sourceMat = actor;
+  S.map.sourceSel = null;
+  S.map.sourceTotal = total;
+  S.map.sel = null;
+  const layers = {};
+  for (const p of points) layers[p.layer] = (layers[p.layer] || 0) + 1;
+  const layer = Object.keys(layers).sort((a, b) => layers[b] - layers[a])[0] || points[0].layer;
+  S.map.layer = layer;
+  S.map.layerSet = true;
+  S.map.fitted = true;
+  closeSources();
+  showPage('map');
+  requestAnimationFrame(() => {
+    if (mode === 'near') centerOnPoint(points[0]);
+    else fitSources(points.filter((p) => p.layer === layer));
+    drawMap();
+  });
+}
+
+function showSourceGroup(actor, kind, label) {
+  const entry = (cat().material_sources || {})[actor];
+  if (!entry) return;
+  let points = sourcePoints(entry);
+  if (kind === 'drop') points = points.filter((x) => x.kind === 'drop' && x.label === label);
+  else if (kind === 'found') points = points.filter((x) => x.kind === 'found');
+  else points = points.filter((x) => x.kind === 'buy' && (!label || x.label === label));
+  if (!points.length) return;
+  const p = playerPos();
+  if (p) points.sort((a, b) => dist3(p, a) - dist3(p, b));
+  const total = points.length;
+  points = points.slice(0, 600);
+  loadSourceIcon(actor);
+  S.map.sources = points;
+  S.map.sourceMat = actor;
+  S.map.sourceSel = null;
+  S.map.sourceTotal = total;
+  S.map.sel = null;
+  S.map.layer = points[0].layer;
+  S.map.layerSet = true;
+  S.map.fitted = true;
+  closeSources();
+  showPage('map');
+  requestAnimationFrame(() => { centerOnPoint(points[0]); drawMap(); });
+}
+
+function clearSources() {
+  S.map.sources = [];
+  S.map.sourceMat = null;
+  S.map.sourceSel = null;
+  S.map.sourceTotal = 0;
+  renderMapDetail();
+  drawMap();
+}
+
+function sourceKindLabel(kind) {
+  return kind === 'buy' ? 'Sold' : kind === 'drop' ? 'Dropped' : 'Found';
 }
 
 /* ------------------------------------------------------------------ map */
@@ -680,6 +880,7 @@ function setMapLayer(layer, keep) {
   if (S.map.layer === layer && keep) return;
   S.map.layer = layer;
   S.map.sel = null;
+  S.map.sourceSel = null;
   S.map.pending = null;
   renderMapToolbar();
   renderMapCats();
@@ -755,25 +956,65 @@ function renderMapCats() {
 function renderMapDetail() {
   const el = $('#map-detail');
   const id = S.map.sel;
-  if (!id) {
-    el.innerHTML = `<div class="empty">Pick a marker or a place from the list below. Click a finished marker to see it too.</div>`;
+  if (id) {
+    const item = (cat().collectibles || []).find((x) => x.id === id);
+    if (!item) { el.innerHTML = ''; return; }
+    const idx = (cat().collectibles || []).indexOf(item);
+    const st = mapItemState(idx);
+    const meta = catMeta(item.cat);
+    const p = playerPos();
+    const d = p ? dist3(p, item) : null;
+    const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
+    const iconFile = mapIconFile(item.cat, st);
+    el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
+      `<div class="k">Status</div><div class="v">${state}</div>` +
+      `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
+      (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}</div>` : '') +
+      `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">Center</button>` +
+      `<button class="btn" data-mprogress="${esc(item.cat)}">All ${esc(meta.label.toLowerCase())}</button></div>`;
     return;
   }
-  const item = (cat().collectibles || []).find((x) => x.id === id);
-  if (!item) { el.innerHTML = ''; return; }
-  const idx = (cat().collectibles || []).indexOf(item);
-  const st = mapItemState(idx);
-  const meta = catMeta(item.cat);
+  if (S.map.sourceSel !== null && S.map.sources[S.map.sourceSel]) {
+    renderSourceDetail();
+    return;
+  }
+  if (S.map.sourceMat) {
+    renderSourceSummary();
+    return;
+  }
+  el.innerHTML = `<div class="empty">Pick a marker or a place from the list below. Click a finished marker to see it too.</div>`;
+}
+function renderSourceSummary() {
+  const el = $('#map-detail');
+  const entry = (cat().material_sources || {})[S.map.sourceMat];
+  if (!entry) { el.innerHTML = ''; return; }
   const p = playerPos();
-  const d = p ? dist3(p, item) : null;
-  const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
-  const iconFile = mapIconFile(item.cat, st);
-  el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
-    `<div class="k">Status</div><div class="v">${state}</div>` +
-    `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
+  const nearest = p && S.map.sources.length ? S.map.sources[0] : null;
+  const onLayer = S.map.sources.filter((x) => x.layer === S.map.layer).length;
+  const icon = entry.icon ? `<img src="companion_data/icons/${encodeURIComponent(entry.icon)}" alt="">` : '';
+  el.innerHTML = `<div class="md-head">${icon}<div><h2>${esc(entry.name)}</h2>` +
+    `<div class="d-sub">Source pins · ${onLayer} on ${layerLabel(S.map.layer)} of ${fmtNum(S.map.sourceTotal)}</div></div></div>` +
+    `<div class="k">Sold</div><div class="v">${(entry.sold || []).length} ${(entry.sold || []).length === 1 ? 'shop' : 'shops'}</div>` +
+    `<div class="k">Dropped</div><div class="v">${(entry.dropped || []).length} ${(entry.dropped || []).length === 1 ? 'enemy type' : 'enemy types'}</div>` +
+    `<div class="k">Found</div><div class="v">${(entry.found || []).reduce((n, f) => n + (f.total || 0), 0)} spots</div>` +
+    (nearest && p ? `<div class="k">Nearest</div><div class="v">${fmtDist(dist3(p, nearest))}</div>` : '') +
+    `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
+}
+function renderSourceDetail() {
+  const el = $('#map-detail');
+  const entry = (cat().material_sources || {})[S.map.sourceMat];
+  const point = S.map.sources[S.map.sourceSel];
+  if (!entry || !point) { el.innerHTML = ''; return; }
+  const p = playerPos();
+  const d = p ? dist3(p, point) : null;
+  const icon = entry.icon ? `<img src="companion_data/icons/${encodeURIComponent(entry.icon)}" alt="">` : '';
+  el.innerHTML = `<div class="md-head">${icon}<div><h2>${esc(entry.name)}</h2>` +
+    `<div class="d-sub">${sourceKindLabel(point.kind)} · ${layerLabel(point.layer)}</div></div></div>` +
+    `<div class="k">Where</div><div class="v">${esc(point.label)}</div>` +
+    `<div class="k">Detail</div><div class="v">${esc(point.meta)}</div>` +
+    `<div class="k">Position</div><div class="v">${Math.round(point.x)}, ${Math.round(point.y)}, ${Math.round(point.z)}</div>` +
     (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}</div>` : '') +
-    `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">Center</button>` +
-    `<button class="btn" data-mprogress="${esc(item.cat)}">All ${esc(meta.label.toLowerCase())}</button></div>`;
+    `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
 }
 function renderNearby() {
   const el = $('#map-nearby');
@@ -812,6 +1053,28 @@ function fitMap() {
   S.map.ty = (h - m.height * S.map.zoom) / 2;
   applyMap();
 }
+function fitSources(points) {
+  const m = cat().map;
+  if (!m || !points.length) return;
+  const vp = $('#map-viewport');
+  const pr = projection();
+  let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+  for (const p of points) {
+    minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
+    minz = Math.min(minz, p.z); maxz = Math.max(maxz, p.z);
+  }
+  const x1 = pr.x(minx), x2 = pr.x(maxx), y1 = pr.y(minz), y2 = pr.y(maxz);
+  const pad = 90;
+  const z = clamp(Math.min((vp.clientWidth - pad * 2) / Math.max(1, x2 - x1),
+                           (vp.clientHeight - pad * 2) / Math.max(1, y2 - y1)), 0.02, 2);
+  S.map.zoom = z;
+  S.map.tx = vp.clientWidth / 2 - ((x1 + x2) / 2) * z;
+  S.map.ty = vp.clientHeight / 2 - ((y1 + y2) / 2) * z;
+  S.map.pending = null;
+  S.map.fitted = true;
+  applyMap();
+  renderMapDetail();
+}
 function applyMap() {
   const img = $('#map-img');
   if (img) img.style.transform = `translate(${S.map.tx}px, ${S.map.ty}px) scale(${S.map.zoom})`;
@@ -849,6 +1112,24 @@ function centerOnItem(item) {
   applyMap();
   renderMapDetail(); renderNearby();
 }
+function centerOnPoint(point) {
+  if (!point) return;
+  if (S.map.layer !== point.layer) {
+    S.map.layer = point.layer;
+    renderMapToolbar(); renderMapCats(); loadMapImage();
+  }
+  const pr = projection();
+  const vp = $('#map-viewport');
+  const z = Math.max(S.map.zoom, 1.25);
+  S.map.zoom = z;
+  S.map.tx = vp.clientWidth / 2 - pr.x(point.x) * z;
+  S.map.ty = vp.clientHeight / 2 - pr.y(point.z) * z;
+  S.map.pending = null;
+  S.map.fitted = true;
+  applyMap();
+  renderMapDetail();
+}
+
 function centerOnPlayer() {
   const p = playerPos();
   if (!p) return;
@@ -898,6 +1179,7 @@ function drawMap() {
   pts.sort((a, b) => (b.x.state - a.x.state) || (a.x.item.id === S.map.sel ? 1 : 0) - (b.x.item.id === S.map.sel ? 1 : 0));
   const base = clamp(3.2 + Math.log2(S.map.zoom + 1) * 1.7, 3, 10);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
+  drawSources(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
   const pos = playerPos();
   if (pos && S.map.layer === playerLayer()) {
@@ -1062,6 +1344,42 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   ctx.restore();
   if (selected) markerRing(ctx, x, y, r + 5);
 }
+function drawSources(ctx, w, h, pr) {
+  if (!S.map.sources.length || !S.map.sourceMat) return;
+  const iconKey = 'source:' + S.map.sourceMat;
+  const icon = S.map.iconImages[iconKey];
+  for (let i = 0; i < S.map.sources.length; i++) {
+    const p = S.map.sources[i];
+    if (p.layer !== S.map.layer) continue;
+    const sx = S.map.tx + pr.x(p.x) * S.map.zoom;
+    const sy = S.map.ty + pr.y(p.z) * S.map.zoom;
+    if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
+    drawSourceMarker(ctx, sx, sy, p, icon, i === S.map.sourceSel);
+  }
+}
+function drawSourceMarker(ctx, x, y, point, icon, selected) {
+  const color = point.kind === 'buy' ? '#e8c56a' : point.kind === 'drop' ? '#e98a7a' : '#8fd6a0';
+  const r = clamp(5 + Math.log2(S.map.zoom + 3) * 1.6, 6, 16);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = 'rgba(6,10,8,.9)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.fillRect(-r, -r, r * 2, r * 2);
+  ctx.strokeRect(-r, -r, r * 2, r * 2);
+  if (selected) {
+    ctx.strokeStyle = '#fff0c2';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-r - 4, -r - 4, (r + 4) * 2, (r + 4) * 2);
+  }
+  ctx.rotate(-Math.PI / 4);
+  if (icon && icon.complete && icon.naturalWidth && S.map.zoom >= 0.18) {
+    const size = r * 1.45;
+    ctx.drawImage(icon, -size / 2, -size / 2, size, size);
+  }
+  ctx.restore();
+}
 function drawPlayer(ctx, x, y) {
   ctx.save();
   ctx.translate(x, y);
@@ -1081,6 +1399,21 @@ function mapHitTest(clientX, clientY) {
   const rect = vp.getBoundingClientRect();
   const mx = clientX - rect.left, my = clientY - rect.top;
   const pr = projection();
+  let sbest = null, sbd = 18;
+  for (let i = 0; i < S.map.sources.length; i++) {
+    const p = S.map.sources[i];
+    if (p.layer !== S.map.layer) continue;
+    const sx = S.map.tx + pr.x(p.x) * S.map.zoom;
+    const sy = S.map.ty + pr.y(p.z) * S.map.zoom;
+    const d = Math.hypot(sx - mx, sy - my);
+    if (d < sbd) { sbd = d; sbest = i; }
+  }
+  if (sbest !== null) {
+    S.map.sourceSel = sbest;
+    S.map.sel = null;
+    renderMapDetail(); drawMap();
+    return;
+  }
   let best = null, bd = 15;
   for (const x of mapVisible(false)) {
     const sx = S.map.tx + pr.x(x.item.x) * S.map.zoom;
@@ -1089,6 +1422,7 @@ function mapHitTest(clientX, clientY) {
     if (d < bd) { bd = d; best = x; }
   }
   if (best) {
+    S.map.sourceSel = null;
     S.map.sel = best.item.id;
     renderMapDetail(); renderNearby(); drawMap();
   }
@@ -1334,6 +1668,8 @@ function attachStatic() {
   $('#btn-min').addEventListener('click', () => call('hide'));
   $('#btn-close').addEventListener('click', () => call('close'));
   $('#btn-settings').addEventListener('click', () => openSettings(!S.modal));
+  const sourcesModal = $('#sources');
+  if (sourcesModal) sourcesModal.addEventListener('click', (e) => { if (e.target === sourcesModal) closeSources(); });
 
   const vp = $('#map-viewport');
   vp.addEventListener('pointerdown', (e) => {
@@ -1441,6 +1777,11 @@ document.addEventListener('click', (e) => {
   if (t.dataset.invactor) { openInventoryActor(t.dataset.invactor); return; }
   if (t.dataset.slot !== undefined) { S.armor.slot = t.dataset.slot; renderArmor(); return; }
   if (t.dataset.armor) { S.armor.sel = t.dataset.armor; renderArmor(); return; }
+  if (t.dataset.srcmat) { openSources(t.dataset.srcmat); return; }
+  if (t.dataset.srcclose !== undefined) { closeSources(); return; }
+  if (t.dataset.srcgroup) { showSourceGroup(S.sourceActor, t.dataset.srcgroup, t.dataset.srclabel || ''); return; }
+  if (t.dataset.srcshow) { showMaterialSources(S.sourceActor, t.dataset.srcshow); return; }
+  if (t.dataset.srcclear !== undefined) { clearSources(); return; }
   if (t.dataset.pcat) { S.progress.cat = t.dataset.pcat; renderProgress(); return; }
   if (t.dataset.pmode) { S.progress.mode = t.dataset.pmode; renderProgress(); return; }
   if (t.dataset.cgroup !== undefined) { S.comp.group = t.dataset.cgroup; renderCompendium(); return; }
@@ -1505,6 +1846,7 @@ function openInventoryActor(actor) {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (S.sourceModal) { closeSources(); e.preventDefault(); return; }
     if (S.modal) { openSettings(false); e.preventDefault(); return; }
     const inp = document.activeElement;
     if (inp && inp.tagName === 'INPUT') { if (inp.value) { inp.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); } else inp.blur(); }

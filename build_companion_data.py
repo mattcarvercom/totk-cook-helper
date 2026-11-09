@@ -12,6 +12,7 @@ Run:
 The output goes to ui/companion_data/ and is gitignored.
 """
 import argparse
+import collections
 import json
 import os
 import re
@@ -104,6 +105,41 @@ MAP_ICON_ITEM_SOURCES = {
 MAP_ICON_COLORS = {
     'shrines': '#4fb8f0', 'hidden_koroks': '#e6c15a', 'carry_koroks': '#f0d77a',
     'lightroots': '#b98cff', 'sages_wills': '#f1e28a',
+}
+
+# Material sources keep a bounded number of points per material so the
+# catalog stays small enough to load in the webview at startup.
+MAX_SOURCE_POINTS = 400
+# Enemy packs also contain sub-actors for weak points, bullets, and mounts.
+# They are not independent spawns, so they would mislead a farming list.
+SOURCE_SUB_ACTORS = (
+    '_KeyCrystal', '_Wander', '_WeakPoint', '_Lower_', '_Upper_', '_Arm_',
+    '_Attention', '_Bullet', '_Tornado', '_SpreadBullet', '_Thorns',
+    '_Uncleared', '_Underground', '_Tear', '_Hair', '_SecretStone', '_Head',
+    '_Ragdoll', '_Practice',
+)
+DRAGON_NOTES = {
+    'Item_Enemy_38': 'Shoot Dinraal as it flies over Eldin and Death Mountain.',
+    'Item_Enemy_39': 'Shoot Dinraal as it flies over Eldin and Death Mountain.',
+    'Item_Enemy_47': 'Shoot Dinraal as it flies over Eldin and Death Mountain.',
+    'Item_Enemy_211': 'Shoot Dinraal as it flies over Eldin and Death Mountain.',
+    'Item_Enemy_228': 'Shoot Dinraal as it flies over Eldin and Death Mountain.',
+    'Item_Enemy_49': 'Shoot Naydra as it flies around Mount Lanayru.',
+    'Item_Enemy_50': 'Shoot Naydra as it flies around Mount Lanayru.',
+    'Item_Enemy_51': 'Shoot Naydra as it flies around Mount Lanayru.',
+    'Item_Enemy_212': 'Shoot Naydra as it flies around Mount Lanayru.',
+    'Item_Enemy_229': 'Shoot Naydra as it flies around Mount Lanayru.',
+    'Item_Enemy_53': 'Shoot Farosh as it flies over Faron and Lake Hylia.',
+    'Item_Enemy_54': 'Shoot Farosh as it flies over Faron and Lake Hylia.',
+    'Item_Enemy_55': 'Shoot Farosh as it flies over Faron and Lake Hylia.',
+    'Item_Enemy_213': 'Shoot Farosh as it flies over Faron and Lake Hylia.',
+    'Item_Enemy_230': 'Shoot Farosh as it flies over Faron and Lake Hylia.',
+    'Item_Enemy_158': 'Shoot the Light Dragon as it circles the sky.',
+    'Item_Enemy_159': 'Shoot the Light Dragon as it circles the sky.',
+    'Item_Enemy_160': 'Shoot the Light Dragon as it circles the sky.',
+    'Item_Enemy_214': 'Shoot the Light Dragon as it circles the sky.',
+    'Item_Ore_J': 'Falls from the sky at night; it has no fixed spawn point.',
+    'Item_Enemy_169': 'Dropped by Soldier Construct IV, a rare late-game construct.',
 }
 
 LAYER_LABEL = {'surface': 'Surface', 'sky': 'Sky', 'depths': 'Depths'}
@@ -536,6 +572,333 @@ class Builder:
         self.catalog['collectible_categories'] = categories
         self.catalog['collectibles'] = items
 
+    # --- material sources -----------------------------------------------------
+
+    def build_material_sources(self):
+        """Index where every armor-upgrade material can be bought, dropped, or found.
+
+        Shops come from the actor packs' ShopParam GoodsLists, drops from the
+        enemy packs' DropTable resources and horn mapping tables, and world
+        spawns from the Banc map placement files. The output is keyed by the
+        item actor used in the armor upgrade rows.
+        """
+        actors = self.catalog.get('actors', {})
+        wanted = collections.OrderedDict()
+        for armor in self.catalog.get('armor', []):
+            for up in armor.get('upgrade', []):
+                actor = up.get('actor')
+                if not actor:
+                    continue
+                row = wanted.setdefault(actor, {'used_in': set(), 'total': 0})
+                row['used_in'].add(armor.get('base') or armor.get('actor'))
+                row['total'] += int(up.get('n') or 0)
+        if not wanted:
+            self.catalog['material_sources'] = {}
+            return
+
+        def humanize(name):
+            name = re.sub(r'^(?:Npc_|NPC_|Enemy_)', '', name)
+            name = name.replace('_', ' ')
+            name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
+            return re.sub(r'\d+$', '', name).strip() or name
+
+        def layer_for(path):
+            if path.startswith('Banc/MinusField/'):
+                return 'depths'
+            if path.startswith('Banc/MainField/Sky/'):
+                return 'sky'
+            return 'surface'
+
+        # Placements: cell actors, sky islands, cave interiors, and the Depths.
+        place = collections.defaultdict(list)
+        placement_re = re.compile(
+            r'Banc/(?:MainField|MinusField)/[A-J]-\d+_(?:Static|Dynamic)\.bcett\.byml\.zs$')
+        placement_files = [
+            p for p in self.rf.files
+            if placement_re.match(p) or
+            ((p.startswith('Banc/MainField/Sky/') or p.startswith('Banc/MainField/Cave/'))
+             and p.endswith('.bcett.byml.zs'))
+        ]
+        for path in placement_files:
+            layer = layer_for(path)
+            try:
+                root = byml.Byml(self.rf.read(path)).root
+            except Exception:
+                continue
+            for actor in root.get('Actors', []):
+                name = actor.get('Gyaml')
+                pos = actor.get('Translate')
+                if not name or not pos or len(pos) < 3:
+                    continue
+                place[name].append((round(float(pos[0]), 1), round(float(pos[1]), 1),
+                                    round(float(pos[2]), 1), layer))
+
+        # Gear the rank-specific horn proxy: an enemy pack can carry several
+        # mapping tables inherited from its templates, so pick the table whose
+        # name shares the longest suffix with the enemy actor.
+        def horn_items(pack, enemy):
+            stem = enemy[len('Enemy_'):] if enemy.startswith('Enemy_') else enemy
+            best = None
+            best_len = -1
+            for key in pack:
+                if 'HornTypeAndAttachmentMappingTable' not in key:
+                    continue
+                name = key.split('/')[-1].split('.')[0]
+                score = 0
+                for i in range(1, min(len(stem), len(name)) + 1):
+                    if stem[-i:] == name[-i:]:
+                        score = i
+                    else:
+                        break
+                if score > best_len:
+                    best_len = score
+                    best = pack[key]
+            if best is None:
+                return []
+            try:
+                root = byml.Byml(best).root
+            except Exception:
+                return []
+            out = []
+            for entry in root.get('HornTypeAndAttachmentMapping', []):
+                item = entry.get('AttachmentName', '').split('/')[-1].split('.')[0]
+                if item.startswith('Item_'):
+                    out.append(item)
+            return out
+
+        # Shops: the 103 actor packs that expose a ShopParam.
+        shops = {}
+        sold = collections.defaultdict(list)
+        for path in self.rf.files:
+            if not (path.startswith('Pack/Actor/') and path.endswith('.pack.zs')):
+                continue
+            try:
+                pack = sarc.read(self.rf.read(path))
+            except Exception:
+                continue
+            if not any(k.startswith('Component/ShopParam/') for k in pack):
+                continue
+            actor = path.split('/')[-1][:-8]
+            try:
+                params = build_data.pack_param(
+                    pack, 'Actor/%s.engine__actor__ActorParam.bgyml' % actor)
+                shop = build_data.pack_param(pack, params.get('Components', {}).get('ShopRef'))
+            except Exception:
+                continue
+            goods = []
+            for entry in shop.get('GoodsList', []):
+                item = entry.get('Actor', '').split('/')[-1]
+                item = item.replace('.engine__actor__ActorParam.gyml', '')
+                if item not in wanted:
+                    continue
+                base = int(actors.get(item, {}).get('buy') or 0)
+                offset = int(entry.get('PriceOffset') or 0)
+                goods.append((item, max(0, base + offset), int(entry.get('StockNum') or 0),
+                              entry.get('Currency') or 'Rupee'))
+            if goods:
+                shops[actor] = goods
+
+        locations = [x for x in self.catalog.get('collectibles', [])
+                     if x.get('cat') == 'locations']
+        stables = [x for x in locations if x.get('name', '').endswith('Stable')]
+
+        def enemy_label(enemy):
+            named = actors.get(enemy, {}).get('name')
+            if named and not named.startswith('Enemy '):
+                return named
+            rank = ''
+            if 'Middle' in enemy:
+                rank = 'Blue '
+            elif 'Senior' in enemy:
+                rank = 'Black '
+            elif 'Dark' in enemy:
+                rank = 'Silver '
+            families = (
+                ('Bokoblin', 'Bokoblin'), ('Lizalfos', 'Lizalfos'),
+                ('Moriblin', 'Moblin'), ('Horablin', 'Horriblin'),
+                ('Giant', 'Hinox'), ('Golem', 'Talus'),
+                ('CaveMaster', 'Frox'), ('Drake', 'Gleeok'),
+                ('Sandworm', 'Molduga'),
+            )
+            for key, label in families:
+                if key in enemy:
+                    return rank + label
+            return humanize(enemy)
+
+        def nearest_place(x, z, layer):
+            best = None
+            best_d = None
+            for loc in locations:
+                if loc.get('layer') != layer:
+                    continue
+                dx = float(loc.get('x', 0)) - x
+                dz = float(loc.get('z', 0)) - z
+                d = dx * dx + dz * dz
+                if best_d is None or d < best_d:
+                    best_d = d
+                    best = loc
+            return best if best_d is not None and best_d <= 300 * 300 else None
+
+        def shop_label(actor, x, z, layer):
+            if actor.startswith('Npc_TripMaster') or actor == 'Npc_RoadShop_01':
+                return 'Beedle'
+            if 'DemonStatue' in actor or 'AmosStatue' in actor:
+                return 'Demon Statue'
+            if x is not None:
+                near = nearest_place(x, z, layer)
+                if near:
+                    return near['name']
+            if actor.startswith('Npc_RoadShop') or actor.startswith('Npc_Road_'):
+                return 'Traveling merchant'
+            return humanize(actor)
+
+        for actor, goods in shops.items():
+            positions = place.get(actor, [])
+            if not positions and actor == 'Npc_RoadShop_01':
+                positions = [(x['x'], x['y'], x['z'], x['layer']) for x in stables]
+            for item, price, stock, currency in goods:
+                seen = set()
+                for x, y, z, layer in positions[:40]:
+                    label = shop_label(actor, x, z, layer)
+                    near = nearest_place(x, z, layer)
+                    place_name = near['name'] if label == 'Beedle' and near else ''
+                    key = (label, round(x), round(z))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    sold[item].append({
+                        'shop': label, 'place': place_name, 'actor': actor, 'price': price,
+                        'stock': stock, 'currency': currency,
+                        'x': x, 'y': y, 'z': z, 'layer': layer,
+                    })
+                if not positions:
+                    sold[item].append({
+                        'shop': shop_label(actor, None, None, None), 'place': '', 'actor': actor,
+                        'price': price, 'stock': stock, 'currency': currency,
+                        'x': None, 'y': None, 'z': None, 'layer': None,
+                    })
+
+        # Enemy drops: direct DropTable items plus the horn mapping tables.
+        drops = collections.defaultdict(dict)
+        for path in self.rf.files:
+            if not (path.startswith('Pack/Actor/Enemy_') and path.endswith('.pack.zs')):
+                continue
+            enemy = path.split('/')[-1][:-8]
+            if any(marker in enemy for marker in SOURCE_SUB_ACTORS):
+                continue
+            try:
+                pack = sarc.read(self.rf.read(path))
+                params = build_data.pack_param(
+                    pack, 'Actor/%s.engine__actor__ActorParam.bgyml' % enemy)
+                drop = build_data.pack_param(pack, params.get('Components', {}).get('DropRef'))
+            except Exception:
+                continue
+            found = {}
+            horn_proxy = False
+            for table_ref in drop.get('DropTableResourceList', []):
+                table_path = table_ref.replace('Work/', '', 1).replace('.gyml', '.bgyml')
+                if table_path not in pack:
+                    continue
+                try:
+                    table = byml.Byml(pack[table_path]).root
+                except Exception:
+                    continue
+                for list_ref in table.get('DropTableElementResourceList', []):
+                    list_path = list_ref.replace('Work/', '', 1).replace('.gyml', '.bgyml')
+                    if list_path not in pack:
+                        continue
+                    try:
+                        elements = byml.Byml(pack[list_path]).root
+                    except Exception:
+                        continue
+                    for entry in elements.get('DropTableElement', []):
+                        if entry.get('ProxyType') == 'HornMaterial':
+                            horn_proxy = True
+                        item = entry.get('DropActorName', '').split('/')[-1]
+                        item = item.replace('.engine__actor__ActorParam.gyml', '')
+                        if item in wanted:
+                            found[item] = max(found.get(item, 0.0),
+                                              float(entry.get('DropProbability') or 0))
+            mapped_horns = horn_items(pack, enemy)
+            for item in mapped_horns:
+                if item in wanted:
+                    found[item] = max(found.get(item, 0.0), 100.0)
+            # The plain Bokoblin template has no mapping table; its rank-0
+            # horn is the only one not declared in a table.
+            if (horn_proxy and not mapped_horns and 'Bokoblin' in enemy
+                    and 'Boss' not in enemy and 'Item_Enemy_77' in wanted):
+                found.setdefault('Item_Enemy_77', 100.0)
+            for item, chance in found.items():
+                prev = drops[item].get(enemy)
+                if prev is None or chance > prev:
+                    drops[item][enemy] = chance
+
+        # Direct world spawns, with live plants/fish/critters standing in for
+        # the harvested item actor.
+        aliases = {}
+        for item in wanted:
+            if item.startswith('Item_PlantGet_'):
+                aliases[item] = 'Item_Plant_' + item[len('Item_PlantGet_'):]
+            elif item.startswith('Item_FishGet_'):
+                aliases[item] = 'Animal_Fish_' + item[len('Item_FishGet_'):]
+            elif item.startswith('Item_InsectGet_'):
+                aliases[item] = 'Animal_Insect_' + item[len('Item_InsectGet_'):]
+
+        def point_list(points):
+            rows = [[x, y, z, layer] for x, y, z, layer in points[:MAX_SOURCE_POINTS]]
+            return rows, len(points)
+
+        sources = {}
+        for item, info in wanted.items():
+            entry = {
+                'name': actors.get(item, {}).get('name') or humanize(item),
+                'icon': actors.get(item, {}).get('icon'),
+                'used_in': sorted(info['used_in']),
+                'need': info['total'],
+                'sold': sold.get(item, []),
+                'dropped': [],
+                'found': [],
+                'notes': [],
+            }
+            merged_drops = {}
+            for enemy, chance in sorted(drops.get(item, {}).items()):
+                points, total = point_list(place.get(enemy, []))
+                label = enemy_label(enemy)
+                row = merged_drops.get(label)
+                if row is None:
+                    merged_drops[label] = {
+                        'enemy': label, 'actor': enemy, 'chance': chance,
+                        'points': points, 'total': total,
+                    }
+                else:
+                    row['chance'] = max(row['chance'], chance)
+                    row['total'] += total
+                    row['points'].extend(points)
+            for row in merged_drops.values():
+                if not row['total']:
+                    continue
+                row['points'] = row['points'][:MAX_SOURCE_POINTS]
+                entry['dropped'].append(row)
+            entry['dropped'].sort(key=lambda d: -d['total'])
+            points = list(place.get(item, []))
+            alias = aliases.get(item)
+            if alias:
+                points.extend(place.get(alias, []))
+            if points:
+                rows, total = point_list(points)
+                entry['found'].append({'name': 'World spawn', 'points': rows, 'total': total})
+            if item in DRAGON_NOTES:
+                entry['notes'].append(DRAGON_NOTES[item])
+            elif item.startswith('Item_Ore_'):
+                entry['notes'].append('Also mined from ore deposits throughout Hyrule.')
+            sources[item] = entry
+
+        self.catalog['material_sources'] = sources
+        coverage = sum(1 for e in sources.values()
+                       if e['sold'] or e['dropped'] or e['found'] or e['notes'])
+        log('material sources: %d/%d materials, %d shops, %d drop entries'
+            % (coverage, len(sources), len(shops), sum(len(v) for v in drops.values())))
+
     # --- map ------------------------------------------------------------------
 
     def build_map(self):
@@ -718,6 +1081,7 @@ class Builder:
         self.collect_compendium()
         self.build_actors()
         self.build_collectibles()
+        self.build_material_sources()
         if not self.skip_map:
             self.build_map()
         self.extract_map_icons()
@@ -735,6 +1099,7 @@ class Builder:
                 'armor': len(self.catalog.get('armor', [])),
                 'compendium': len(self.catalog.get('compendium', [])),
                 'collectibles': len(self.catalog.get('collectibles', [])),
+                'material_sources': len(self.catalog.get('material_sources', {})),
                 'icons': len([v for v in self.built_icons.values() if v]),
                 'map_icons': len(self.catalog.get('map_icons', {})),
             },
