@@ -1638,7 +1638,7 @@ function mapVisible() {
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
-    if (it.layer !== S.map.layer) continue;
+    if (it.layer !== S.map.layer || it.map_hidden) continue;
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
@@ -1658,6 +1658,7 @@ function searchResults() {
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
+    if (it.map_hidden) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
     if (!only) {
@@ -1728,7 +1729,7 @@ function mapLayerCounts(layer) {
   const states = (dyn().completion && dyn().completion.states) || [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
-    if (it.layer !== layer) continue;
+    if (it.layer !== layer || it.map_hidden) continue;
     if (!out[it.cat]) out[it.cat] = { total: 0, complete: 0 };
     out[it.cat].total++;
     if ((states[i] || 0) >= 2) out[it.cat].complete++;

@@ -811,8 +811,6 @@ class Builder:
             meta = CATEGORIES.get(key)
             if not meta:
                 continue
-            if key == 'locations':
-                rows = [row for row in rows if not skip_location_marker(row)]
             cat = {'key': key, 'label': meta['label'], 'color': meta['color'], 'icon': meta['icon'],
                    'kind': meta['kind'], 'total': len(rows)}
             if key in MAP_ONLY_KEYS:
@@ -853,6 +851,8 @@ class Builder:
                     'layer': layer,
                     'kind': meta['kind'],
                 }
+                if key == 'locations' and skip_location_marker(row):
+                    item['map_hidden'] = True
                 internal = row.get('internal_name') or row.get('id')
                 if internal:
                     item['internal'] = str(internal)
