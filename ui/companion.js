@@ -384,6 +384,8 @@ function renderNav() {
 }
 
 const SET_BONUS_LEVEL = 2;
+const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: 'armor', materials: 'material',
+                     food: 'meal', zonai: 'device', keyitems: 'key item' };
 const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
                           'sages_wills', 'schema_stones'];
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
@@ -736,6 +738,22 @@ function renderStatus() {
       `<span class="qs">${c.missing} missing${c.started ? ` · ${c.started} started` : ''}</span>` +
       `<span class="bar"><i style="width:${pct(done, c.total)}%"></i></span></button>`;
   };
+  const pouchStat = (key, label) => {
+    const c = invCat(key);
+    if (!c.cap) return '';
+    const sub = c.next_cost ? `Next slot: ${c.next_cost} seeds · max ${c.max}` : `${POUCH_NOUN[key] || 'item'} slots`;
+    return `<div class="stat"><span class="k">${esc(label)}</span>` +
+      `<span class="v">${c.used}<small> / ${c.cap}</small></span>` +
+      `<span class="vv">${esc(sub)}</span></div>`;
+  };
+  const keyItem = (actor, label) => {
+    const it = invCat('keyitems').items.find((x) => x.actor === actor);
+    const count = it ? it.count : 0;
+    const icon = ainfo(actor).icon;
+    return `<button class="keyitem" data-invactor="${esc(actor)}">` +
+      `${icon ? `<img src="companion_data/icons/${encodeURIComponent(icon)}" alt="">` : ''}` +
+      `<span>${esc(label)}</span><b>${fmtNum(count)}</b></button>`;
+  };
   const sages = (st.sages || []).map(sageTile).join('');
   const abilities = (st.abilities || []).map(abilityChip).join('') || '<span class="dimmed">None yet</span>';
   const pos = st.position || {};
@@ -792,6 +810,12 @@ function renderStatus() {
         <span>${esc(layer)}</span>
       </div>
 
+      <div class="keyitem-strip">
+        ${keyItem('Obj_KorokNuts', 'Korok Seeds')}
+        ${keyItem('CaveMasterMedal', 'Bubbul Gems')}
+        ${keyItem('Obj_DungeonClearSeal', 'Light of Blessing')}
+      </div>
+
       <h3>Equipped</h3>
       <div class="equip-grid">
         ${equipCard('Weapon', weapon, 'sword', weapon ? `${weapon.life || 0} / ${(weapon.weapon && weapon.weapon.max_life || 0) + (weapon.extra || 0)} durability` : '')}
@@ -818,6 +842,20 @@ function renderStatus() {
         <div class="stat"><span class="k">Deaths</span><span class="v">${st.deaths !== null && st.deaths !== undefined ? fmtNum(st.deaths) : '--'}</span></div>
         <div class="stat"><span class="k">Distance</span><span class="v">${pathKm !== null ? `${pathKm.toFixed(1)}<small>km</small>` : '--'}</span></div>
         <div class="stat"><span class="k">Path points</span><span class="v">${st.path_points !== null && st.path_points !== undefined ? fmtNum(st.path_points) : '--'}</span></div>
+      </div>
+    </section>
+
+    <section class="card pouch-wide">
+      <h3>Pouch <span class="sub">slots and next upgrades</span></h3>
+      <div class="statrow pouch">
+        ${pouchStat('weapons', 'Weapons')}
+        ${pouchStat('bows', 'Bows')}
+        ${pouchStat('shields', 'Shields')}
+        ${pouchStat('armor', 'Armor')}
+        ${pouchStat('materials', 'Materials')}
+        ${pouchStat('food', 'Meals')}
+        ${pouchStat('zonai', 'Zonai devices')}
+        ${pouchStat('keyitems', 'Key items')}
       </div>
     </section>
 
@@ -865,8 +903,31 @@ function renderInventory() {
   const allItems = categories.flatMap((c) => c.items);
   const current = S.inv.cat ? invCat(S.inv.cat) : { key: '', label: 'All items', items: allItems };
   $('#inv-cats').innerHTML = `<button class="fxchip" data-invcat="" aria-pressed="${S.inv.cat === ''}"><span>All</span><span class="c">${allItems.length}</span></button>` +
-    categories.map((c) =>
-      `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"><span>${esc(c.label)}</span><span class="c">${c.items.length}</span></button>`).join('');
+    categories.map((c) => {
+      const cap = c.cap ? `/${c.cap}` : '';
+      const title = c.next_cost ? `Next slot: ${c.next_cost} Korok Seeds. Max ${c.max}.`
+        : c.cap ? `${c.used} of ${c.cap} slots.` : '';
+      return `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"${title ? ` title="${esc(title)}"` : ''}>` +
+        `<span>${esc(c.label)}</span><span class="c">${c.items.length}${cap}</span></button>`;
+    }).join('');
+  const pouch = $('#inv-pouch');
+  if (pouch) {
+    const cap = current.cap;
+    if (cap) {
+      const bits = [];
+      bits.push(`<b>${current.used} / ${cap}</b> ${POUCH_NOUN[current.key] || 'item'} slots`);
+      if (current.next_cost) {
+        const seed = ainfo('Obj_KorokNuts').icon;
+        bits.push(`${seed ? `<img src="companion_data/icons/${encodeURIComponent(seed)}" alt="">` : ''} Next slot: <b>${current.next_cost}</b> Korok Seeds`);
+      }
+      if (current.max && current.key !== 'armor') bits.push(`Max ${current.max}`);
+      pouch.innerHTML = bits.join('<span class="sep">·</span>');
+      pouch.hidden = false;
+    } else {
+      pouch.hidden = true;
+      pouch.innerHTML = '';
+    }
+  }
   $('#inv-filter').value = S.inv.filter;
   $('#inv-filter').placeholder = S.inv.cat ? `Filter ${current.label.toLowerCase()}` : 'Filter inventory';
   const f = S.inv.filter.trim().toLowerCase();
@@ -1037,6 +1098,17 @@ function renderArmor() {
     setSel.dataset.ready = '1';
   }
   setSel.value = S.armor.set || '';
+  const armorPouch = $('#armor-pouch');
+  if (armorPouch) {
+    const armorCat = invCat('armor');
+    if (armorCat.cap) {
+      armorPouch.innerHTML = `<b>${armorCat.used} / ${armorCat.cap}</b> armor slots`;
+      armorPouch.hidden = false;
+    } else {
+      armorPouch.hidden = true;
+      armorPouch.innerHTML = '';
+    }
+  }
   $('#armor-filter').value = S.armor.filter;
   const f = S.armor.filter.trim().toLowerCase();
   const list = pieces.filter((p) => {
@@ -1112,6 +1184,7 @@ function renderArmorDetail(p) {
     if (!upg.length) continue;
     const toRank = nextRow ? nextRow.rank : r.rank + 1;
     const done = currentRank >= toRank;
+    if (done) continue;
     const isNext = currentRank > 0 && r.rank === currentRank;
     const rows = upg.map((u) => {
       const have = S.matCounts[u.actor] || 0;
@@ -1122,20 +1195,21 @@ function renderArmorDetail(p) {
     }).join('');
     panels.push(`<div class="upg-panel${isNext ? ' next' : ''}${done ? ' done' : ''}">` +
       `<div class="upg-head"><span class="lv">Lv ${r.rank} → ${nextRow ? nextRow.rank : 'MAX'}</span>` +
-      (isNext ? '<span class="tag gold">Next</span>' : '') +
-      (done ? '<span class="tag">Done</span>' : '') + `</div>` +
+      (isNext ? '<span class="tag gold">Next</span>' : '') + `</div>` +
       `<div class="upg">${rows}</div>` +
       `<div class="grid2"><dt>Defense</dt><dd>${r.defense || 0} → ${nextRow ? nextRow.defense : (r.defense || 0)}</dd>` +
       `<dt>Rupees</dt><dd>${fmtNum(r.price)}</dd></div></div>`);
   }
+  const maxRank = ranks.length ? ranks[ranks.length - 1].rank : 1;
   const upgradeBlock = panels.length
     ? `<h3 class="label">Upgrades</h3>${panels.join('')}`
-    : `<p class="note">No upgrade materials are recorded for this piece.</p>`;
+    : `<p class="note">${owned && currentRank >= maxRank ? 'Fully upgraded.' : 'No upgrade materials are recorded for this piece.'}</p>`;
 
   const effects = current.effect_info || [];
-  const effectBlock = `<h3 class="label">Effects</h3>` +
-    (effects.length ? `<div class="tagrow">${effectChips(effects, 'eff')}</div>` + effectNotes(effects)
-                    : `<p class="note">No special effect on this piece.</p>`);
+  const effectBlock = effects.length
+    ? `<h3 class="label">Effect</h3><div class="tagrow">${effectChips(effects, 'eff')}</div>` +
+      effectNotes(effects)
+    : '';
 
   const slotOrder = { Head: 0, Upper: 1, Lower: 2 };
   const setPieces = armorPieces().filter((x) => x.set_key === p.set_key)
@@ -1147,36 +1221,30 @@ function renderArmorDetail(p) {
   const allOwned = setPieces.every((x) => x.owned);
   const multiPiece = setPieces.length > 1;
   const bonusReady = bonus.length > 0 && allOwned && minRank >= SET_BONUS_LEVEL;
-  const pieceRows = setPieces.map((x) =>
-    `<div class="setpiece"><span class="slot">${slotLabel(x.slot)}</span>` +
-    `<span class="nm">${esc(x.name)}</span>` +
-    `<span class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</span></div>`
+  const pieceChips = setPieces.map((x) =>
+    `<span class="setpiece-chip"><span>${slotLabel(x.slot)}</span>` +
+    `<b class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</b></span>`
   ).join('');
-  const requirement = multiPiece
-    ? `Requires all ${setPieces.length} pieces at Lv ${SET_BONUS_LEVEL}+`
-    : `Requires this piece at Lv ${SET_BONUS_LEVEL}+`;
   const bonusBlock = bonus.length
-    ? `<div class="setbonus"><div class="sb-head"><span class="tag gold">Set bonus</span>` +
-      `<span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Unlocked' : requirement}</span></div>` +
-      `<div class="tagrow">${effectChips(bonus, 'bonus')}</div>` + effectNotes(bonus) +
-      `<div class="dim">${bonusReady
-        ? 'All pieces meet the requirement. Applies when the full set is equipped.'
-        : `${ownedPieces.length} of ${setPieces.length} pieces owned${allOwned && multiPiece ? ` · lowest Lv ${minRank}` : ''}.`}</div></div>`
-    : `<div class="dim">This set has no set bonus.</div>`;
-  const setBlock = setPieces.length > 1 || bonus.length
-    ? `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
-      pieceRows + bonusBlock + `</div>`
-    : `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
-      `<div class="dim">This piece is worn on its own. No set bonus.</div></div>`;
+    ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Needs all ${setPieces.length} at Lv ${SET_BONUS_LEVEL}+`}</span>` +
+      `<span class="bonus-fx">${esc(bonus.map((x) => x.name).join(', '))}</span>` +
+      `<span class="bonus-desc">${esc(bonus.map((x) => effectDesc(x)).filter(Boolean).join(' '))}</span></div>`
+    : '';
+  const setBlock = (multiPiece || bonus.length)
+    ? `<h3 class="label">Set</h3><div class="setbox compact"><div class="set-head">` +
+      `<span class="setname">${esc(p.set_name || 'Armor')}</span>` +
+      `<span class="setpieces-inline">${pieceChips}</span></div>` +
+      bonusBlock +
+      (!bonusReady && multiPiece ? `<div class="dim small">${ownedPieces.length} of ${setPieces.length} pieces owned${allOwned ? `, lowest Lv ${minRank}` : ''}.</div>` : '') +
+      `</div>`
+    : '';
 
   el.innerHTML = `<div class="in"><div class="d-head">${art({ icon: p.icon }, 'hero')}<div><h2 class="d-name">${esc(p.name)}${resistanceBadges(effects)}</h2>` +
-    `<div class="d-sub">${esc(p.set_name || 'Armor')} · ${owned ? `owned, level ${p.owned.rank || 1}` : 'not owned'}</div></div></div>` +
+    `<div class="d-sub">${owned ? `owned, level ${p.owned.rank || 1}` : 'not owned'}</div></div></div>` +
     `<div class="tagrow"><span class="tag">${slotLabel(p.slot)}</span>` +
     `<span class="tag">Defense ${current.defense || 0}</span>${owned ? '<span class="tag gold">Owned</span>' : ''}</div>` +
-    effectBlock + setBlock +
     (current.caption ? `<p class="cap">${esc(current.caption)}</p>` : '') +
-    `<div class="bar"><i style="width:${((p.owned ? p.owned.rank : 1) / 4) * 100}%"></i></div>` +
-    upgradeBlock + `</div>`;
+    effectBlock + setBlock + upgradeBlock + `</div>`;
 }
 
 /* ------------------------------------------------------------------ sources */
@@ -1559,7 +1627,7 @@ function renderMap() {
   requestAnimationFrame(() => { if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; } else drawMap(); });
 }
 function renderMapToolbar() {
-  const layers = [['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud'], ['depths', 'Depths', 'dark-mode']];
+  const layers = [['depths', 'Depths', 'dark-mode'], ['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud']];
   $('#map-layers').innerHTML = layers.map(([k, l, ic]) =>
     `<button data-layer="${k}" aria-pressed="${S.map.layer === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
   const found = [['all', 'All', 'select-all'], ['missing', 'Missing', 'radio-button-unchecked'], ['found', 'Found', 'check-circle']];
@@ -2737,11 +2805,13 @@ document.addEventListener('click', (e) => {
   if (t.dataset.csort) { S.cook.sort = t.dataset.csort; renderCooking(); return; }
   if (t.dataset.cdish) { S.cook.sel = t.dataset.cdish; showPage('cook'); renderCooking(); return; }
   if (t.dataset.mcats) {
-    if (t.dataset.mcats === 'all') {
+    const all = t.dataset.mcats === 'all';
+    if (all) {
       for (const c of (cat().collectible_categories || [])) S.map.cats.add(c.key);
     } else {
       S.map.cats.clear();
     }
+    S.map.medals = all;
     renderMapCats(); renderNearby(); drawMap(); return;
   }
   if (t.dataset.mcat) {

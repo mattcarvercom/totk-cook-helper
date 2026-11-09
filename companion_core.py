@@ -346,6 +346,15 @@ class Save:
 
     # --- inventory ------------------------------------------------------------
 
+    def pouch_sizes(self):
+        """Current weapon, bow, and shield pouch sizes from ValidNum[0]."""
+        out = {}
+        for key, cat in (('weapons', 'Weapon'), ('bows', 'Bow'), ('shields', 'Shield')):
+            off, count = self._array('Pouch.%s.ValidNum' % cat)
+            if off and count:
+                out[key] = struct.unpack_from('<i', self.b, off)[0]
+        return out
+
     def _effect(self, cat, i):
         types = self.ints('Pouch.%s.Content.Effect.Type' % cat)
         values = self.ints('Pouch.%s.Content.Effect.Value' % cat)

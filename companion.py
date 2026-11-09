@@ -14,6 +14,7 @@ import fcntl
 import glob
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -37,6 +38,15 @@ DEFAULTS = {
     'save_path': '',
     'ui_state': {},
 }
+
+POUCH_BASE = {'weapons': 10, 'bows': 5, 'shields': 4}
+POUCH_MAX = {'weapons': 20, 'bows': 14, 'shields': 20}
+POUCH_COSTS = {
+    'weapons': [1, 2, 3, 5, 8, 12, 17, 25, 35, 45],
+    'bows': [1, 2, 3, 5, 8, 12, 17, 25, 35],
+    'shields': [1, 2, 3, 4, 5, 10, 10, 10, 10, 10, 15, 15, 15, 15, 15, 20],
+}
+POUCH_OTHER = {'armor': 150, 'materials': 255, 'food': 60, 'zonai': 30, 'keyitems': 100}
 
 KIND_NAMES = {'CookMeat': 'Meat', 'CookFish': 'Fish', 'CookMushroom': 'Mushroom', 'CookFruit': 'Fruit',
               'CookSpice': 'Spice', 'CookPlant': 'Plant', 'CookInsect': 'Critter', 'CookEnemy': 'Monster part',
@@ -103,7 +113,29 @@ def base_item(catalog, actor):
             'kind': a.get('kind') or ''}
 
 
-def enrich_inventory(inv, catalog, cook):
+def pretty_actor(actor):
+    name = actor or ''
+    for prefix in ('AbsObj_', 'AsbObj_', 'FldObj_', 'Obj_', 'Item_', 'SpObj_'):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    name = os.path.splitext(name)[0]
+    return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', name).replace('_', ' ')
+
+
+def fused_name(catalog, actor):
+    entry = actor_entry(catalog, actor)
+    if entry.get('name'):
+        return entry['name']
+    names = catalog.get('fuse_names') or {}
+    for key in (actor, actor.replace('AbsObj_', 'AsbObj_', 1),
+                actor.replace('AsbObj_', 'AbsObj_', 1)):
+        if key in names:
+            return names[key]
+    return pretty_actor(actor)
+
+
+def enrich_inventory(inv, catalog, cook, pouch_sizes=None):
+    pouch_sizes = pouch_sizes or {}
     armor_by_actor = {a['actor']: a for a in catalog.get('armor', [])}
     out = {}
     for key in core.CATEGORY_ORDER:
@@ -116,7 +148,7 @@ def enrich_inventory(inv, catalog, cook):
                 it['weapon'] = a.get('weapon') or {}
                 if raw.get('fused'):
                     fused = actor_entry(catalog, raw['fused'])
-                    it['fused_name'] = fused.get('name') or raw['fused']
+                    it['fused_name'] = fused_name(catalog, raw['fused'])
                     it['fused_icon'] = fused.get('icon')
                 else:
                     it.pop('fused', None)
@@ -144,7 +176,19 @@ def enrich_inventory(inv, catalog, cook):
                 it['effect_name'] = cc.EFFECT_NAMES.get(raw.get('effect') or 'None', '')
             items.append(it)
         items.sort(key=lambda x: ((x.get('rank') or 0), (x.get('name') or '').lower()))
-        out[key] = {'key': key, 'label': core.CATEGORY_LABELS.get(key, key), 'items': items}
+        entry = {'key': key, 'label': core.CATEGORY_LABELS.get(key, key), 'items': items,
+                 'used': len(items)}
+        if key in POUCH_COSTS:
+            entry['cap'] = int(pouch_sizes.get(key) or POUCH_MAX[key])
+            entry['max'] = POUCH_MAX[key]
+            bought = max(0, entry['cap'] - POUCH_BASE[key])
+            costs = POUCH_COSTS[key]
+            entry['next_cost'] = costs[bought] if bought < len(costs) else None
+        elif key in POUCH_OTHER:
+            entry['cap'] = POUCH_OTHER[key]
+            entry['max'] = POUCH_OTHER[key]
+            entry['next_cost'] = None
+        out[key] = entry
     return [out[k] for k in core.CATEGORY_ORDER]
 
 
@@ -478,7 +522,7 @@ class App:
         payload = {
             'version': self.version, 'data_version': self.data_version, 'save': self.save_status(),
             'status': status,
-            'inventory': enrich_inventory(inv, self.catalog, self.cook),
+            'inventory': enrich_inventory(inv, self.catalog, self.cook, save.pouch_sizes()),
             'completion': save.completion(),
             'compendium': save.compendium(),
             'cooking': build_cooking(inv, self.cook, self.catalog),

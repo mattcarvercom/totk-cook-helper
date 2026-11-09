@@ -51,6 +51,7 @@
               <input id="inv-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter inventory">
               <kbd>/</kbd>
             </label>
+            <div class="pouch-note" id="inv-pouch" hidden></div>
           </div>
           <div class="gridwrap"><div class="grid" id="inv-grid"></div></div>
         </div>
@@ -71,6 +72,7 @@
                 <input id="armor-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter armor">
               </label>
             </div>
+            <div class="pouch-note" id="armor-pouch" hidden></div>
           </div>
           <div class="gridwrap"><div class="grid" id="armor-grid"></div></div>
         </div>
@@ -103,7 +105,6 @@
             <img id="map-img" alt="" draggable="false">
             <canvas id="map-canvas"></canvas>
             <div class="map-loading" id="map-loading">Loading map…</div>
-            <div class="map-compass" aria-hidden="true"><span>N</span></div>
             <div class="map-zoom">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>
               <button class="btn" id="map-zoomout" title="Zoom out">−</button>

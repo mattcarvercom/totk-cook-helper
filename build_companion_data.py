@@ -154,7 +154,7 @@ MAP_ICON_SOURCES = {
     'shrines': 'Nt_MapDungeonNew_02',
     'lightroots': None,
     'towers': 'MapIconTower_00',
-    'hidden_koroks': 'MapIconKorok_x2',
+    'hidden_koroks': 'MapIconKorok',
     'carry_koroks': 'MapIconKorok_x2',
     'bubbuls': 'MapIconCaveM_72x72',
     'locations': 'MapIconFrontierPoint_64x64',
@@ -249,6 +249,23 @@ def prettify(name):
     name = re.sub(r'^(Work/Actor/|Actor/)', '', name)
     name = re.sub(r'\.(engine__actor__ActorParam\.)?(gyml|bgyml)$', '', name)
     return name.replace('_', ' ')
+
+
+FUSE_NAME_OVERRIDES = {
+    'Rock': 'Rock',
+    'Rock_Large': 'Large Rock',
+    'SimpleStone': 'Simple Stone',
+    'IronLump': 'Iron Lump',
+    'MeatRock': 'Meat Rock',
+}
+
+
+def fuse_name(common):
+    if not common:
+        return ''
+    if common in FUSE_NAME_OVERRIDES:
+        return FUSE_NAME_OVERRIDES[common]
+    return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', common).replace('_', ' ')
 
 
 def pick_tile_suffix(entries):
@@ -495,13 +512,23 @@ class Builder:
         self.enhancement = {basename(row['__RowId']): row for row in
                             byml.Byml(self.rf.read(self.rf.find('RSDB/EnhancementMaterialInfo.', '.byml.zs'))).root}
         self.attachment_info = {}
+        self.attachment_names = {}
         try:
             for row in byml.Byml(self.rf.read(self.rf.find('RSDB/AttachmentActorInfo.', '.byml.zs'))).root:
                 actor = row.get('__RowId')
-                if actor:
-                    self.attachment_info[actor] = int(row.get('AttachmentAdditionalDamage', 0) or 0)
+                if not actor:
+                    continue
+                self.attachment_info[actor] = int(row.get('AttachmentAdditionalDamage', 0) or 0)
+                name = fuse_name(row.get('AttachmentCommonName'))
+                if name:
+                    self.attachment_names[actor] = name
+                    if actor.startswith('AsbObj_'):
+                        self.attachment_names['AbsObj_' + actor[len('AsbObj_'):]] = name
+                    elif actor.startswith('AbsObj_'):
+                        self.attachment_names['AsbObj_' + actor[len('AbsObj_'):]] = name
         except Exception:
             self.attachment_info = {}
+            self.attachment_names = {}
         self.series_effects = {}
         series_path = ('GameParameter/SeriesArmorEffectParamList/'
                        'Default.game__equipment__SeriesArmorEffectParamList.bgyml')
@@ -1420,6 +1447,7 @@ class Builder:
         self.build_armor_catalog()
         self.collect_compendium()
         self.build_actors()
+        self.catalog['fuse_names'] = self.attachment_names
         self.extract_sage_icons()
         self.build_collectibles()
         self.build_material_sources()

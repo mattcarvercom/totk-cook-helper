@@ -145,10 +145,12 @@ X/Y/Z coordinates and a direction arrow from Link. Empty detail or Nearby
 panels are hidden instead of leaving a blank box. Map controls use a small
 vendored Material Symbols set so the app never fetches icons from a CDN.
 Completion lists every tracked category and can show only missing entries.
-Armor shows each upgrade level and its materials, with a Ready or Need badge on
-the grid and a set-bonus level requirement on the detail. Upgrade materials
-and material details have a **Sources** action: it lists shops with prices and
-stock, enemy drops with their spawn counts, and world spawns, then can pin
+Armor shows a Ready or Need badge on the grid. The detail puts the item
+description first, then the piece effect and a compact set panel with piece
+levels and the set-bonus description. Upgrades list only levels still ahead of
+the current rank. Upgrade materials and material details have a **Sources**
+action: it lists shops with prices and stock, enemy drops with their spawn
+counts, and world spawns, then can pin
 those places on the map. Shops come from the actor packs' ShopParam data,
 drops from the enemy DropTable and horn mapping data, and spawns from the Banc
 map placements, all from your own game files.
@@ -158,11 +160,16 @@ sages, special powers, equipped gear, and active armor effects, using the
 game's sage portraits and ability icons. Attack includes the fused material and
 weapon modifier; Defense is the sum of the three worn pieces. Active Attack Up
 also shows the adjusted value. Journey shows total playtime, deaths, distance,
-and Hero's Path points from the save. Set bonuses and armor effects include a
-short description of what the effect does. The inventory opens on All, and the
-armor page opens with Owned only; armor with elemental or gloom resistance
-shows the matching icon in its top-left corner. Weapons and shields show a
-fusion badge and the fused item in their details. Cooking starts with dishes
+and Hero's Path points from the save. Key item chips show Korok Seeds, Bubbul
+Gems, and Light of Blessing. A pouch summary shows each bag's used and maximum
+slots plus the next Hestu price for weapons, bows, and shields. The inventory
+opens on All, and category chips show their slot cap, such as Weapons 12/12 or
+Materials 137/255. Choosing an equipment category also shows the next Korok
+Seed cost, and the armor page shows owned pieces against its 150 slots. Armor
+opens with Owned only; armor with elemental or gloom resistance shows the
+matching icon in its top-left corner. Weapons and shields show a fusion badge
+and the fused item in their details, including object fusions such as Rock.
+Cooking starts with dishes
 that the current pouch can make; **All recipes** adds the full recipe table
 with required ingredient slots and marks entries the pouch cannot cook yet.
 Stamina recovery dishes show the recovered portion of a stamina wheel. New
