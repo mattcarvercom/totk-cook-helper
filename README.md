@@ -112,9 +112,10 @@ python3 build_companion_data.py /path/to/TotK
 ```
 
 The build reads the port's `romfs` and writes `ui/companion_data/` with icons,
-map layers, text and the catalog. Those files come from your own copy of the
-game and are gitignored. The collectible coordinates are the only pre-computed
-input, documented in `data/NOTICE.md`.
+map layers, reveal regions, text and the catalog. Those files come from your own
+copy of the game and are gitignored. The collectible coordinates and the map
+region polygons are the only pre-computed inputs, documented in
+`data/NOTICE.md`.
 
 Run it from the repository root:
 
@@ -130,11 +131,15 @@ The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
-map. **Show undiscovered map** is off by default, so the map starts with the
-areas you have revealed through Skyview Towers and Lightroots. Travel
-Medallions and Skyview Towers appear when the save has them. Marker details
+map. **Reveal full map** is off by default, so the map starts with the
+areas you have revealed in the game. Surface and Sky use the Skyview Tower
+region boundaries, and the Depths reveal the Field Map Area around each
+activated Lightroot, so the shapes are regions rather than circles. Travel
+Medallions have their own toggle in the left pane, appear only on their layer,
+and use the game's medallion art without a background plate. Marker details
 and **Near Link** or **Results** are on the right, with game-style X/Y/Z
-coordinates and a direction arrow from Link.
+coordinates in the Purah Pad order and a direction arrow from Link. Empty
+detail or Nearby panels are hidden instead of leaving a blank box.
 Completion lists every tracked category and can show only missing entries.
 Armor shows each upgrade level and its materials, with a Ready or Need badge on
 the grid and a set-bonus level requirement on the detail. Upgrade materials

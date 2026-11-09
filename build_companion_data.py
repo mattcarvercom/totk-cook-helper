@@ -267,6 +267,52 @@ def pick_tile_suffix(entries):
     return None
 
 
+def point_in_ring(x, z, ring):
+    inside = False
+    n = len(ring)
+    for i in range(n):
+        x1, z1 = ring[i][0], ring[i][1]
+        x2, z2 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
+        if (z1 > z) != (z2 > z):
+            if x < (x2 - x1) * (z - z1) / (z2 - z1) + x1:
+                inside = not inside
+    return inside
+
+
+def region_bbox(region):
+    xs = [p[0] for poly in region['polys'] for p in poly['outer']]
+    zs = [p[1] for poly in region['polys'] for p in poly['outer']]
+    return (min(xs), min(zs), max(xs), max(zs))
+
+
+def region_contains(region, x, z):
+    box = region.get('_bbox')
+    if box and (x < box[0] or x > box[2] or z < box[1] or z > box[3]):
+        return False
+    for poly in region['polys']:
+        if not point_in_ring(x, z, poly['outer']):
+            continue
+        if any(point_in_ring(x, z, hole) for hole in poly['holes']):
+            continue
+        return True
+    return False
+
+
+def region_for(regions, x, z):
+    for region in regions:
+        if region_contains(region, x, z):
+            return region
+    return None
+
+
+def region_for_smallest(regions, x, z):
+    hits = [region for region in regions if region_contains(region, x, z)]
+    if not hits:
+        return None
+    return min(hits, key=lambda region: (region['_bbox'][2] - region['_bbox'][0]) *
+                                          (region['_bbox'][3] - region['_bbox'][1]))
+
+
 def tint_icon(img, color):
     """Recolor a game map icon while keeping its black symbol readable.
 
@@ -716,6 +762,8 @@ class Builder:
                     'layer': layer,
                     'kind': meta['kind'],
                 }
+                if row.get('internal_name'):
+                    item['internal'] = row['internal_name']
                 if 'completion_hash' in row:
                     item['hash'] = int(row['completion_hash']) & 0xffffffff
                 elif 'guid_hash' in row:
@@ -725,6 +773,89 @@ class Builder:
                 items.append(item)
         self.catalog['collectible_categories'] = categories
         self.catalog['collectibles'] = items
+
+    # --- map reveal regions ---------------------------------------------------
+
+    def build_reveal_regions(self):
+        """Store the game's surface tower and Depths reveal regions.
+
+        Surface and Sky reveal by Skyview Tower region. The Depths map is a set
+        of Field Map Area polygons, each assigned to the nearest Lightroot.
+        Activating a Lightroot reveals its polygon group, so the reveal follows
+        the map regions instead of a fixed radius. The UI draws the polygons
+        directly, which keeps the catalog small and avoids per-region textures.
+        """
+        path = os.path.join(DATA, 'map_regions.json')
+        if not os.path.isfile(path):
+            log('reveal regions: data/map_regions.json missing')
+            return
+        data = json.load(open(path, encoding='utf-8'))
+        towers = data.get('towers') or []
+        depths = data.get('depths') or []
+        for region in towers + depths:
+            region['_bbox'] = region_bbox(region)
+
+        lightroots = [it for it in self.catalog['collectibles']
+                      if it['cat'] == 'lightroots' and it.get('internal')]
+
+        def centroid(region):
+            xs = [p[0] for poly in region['polys'] for p in poly['outer']]
+            zs = [p[1] for poly in region['polys'] for p in poly['outer']]
+            return sum(xs) / len(xs), sum(zs) / len(zs)
+
+        owned = collections.defaultdict(list)
+        for root in lightroots:
+            region = region_for_smallest(depths, root['x'], root['z'])
+            if region:
+                owned[root['internal']].append(region)
+        for root in lightroots:
+            if owned.get(root['internal']):
+                continue
+            cx, cz = root['x'], root['z']
+            region = min(depths, key=lambda r: (centroid(r)[0] - cx) ** 2 +
+                                               (centroid(r)[1] - cz) ** 2)
+            owned[root['internal']].append(region)
+        covered = {id(region) for regions in owned.values() for region in regions}
+        for region in depths:
+            if id(region) in covered:
+                continue
+            cx, cz = centroid(region)
+            root = min(lightroots, key=lambda it: (it['x'] - cx) ** 2 + (it['z'] - cz) ** 2)
+            owned[root['internal']].append(region)
+
+        region_owners = collections.defaultdict(list)
+        for name, regions in owned.items():
+            for region in regions:
+                region_owners[region['area']].append(name)
+        for region in depths:
+            region['owners'] = region_owners.get(region['area'], [])
+
+        self.catalog['map_regions'] = {'towers': towers, 'depths': depths}
+        self.catalog.pop('reveal', None)
+        for item in self.catalog['collectibles']:
+            item.pop('regions', None)
+            if item['cat'] == 'lightroots' and item.get('internal'):
+                item['region'] = item['internal']
+            elif item['layer'] == 'depths':
+                item.pop('region', None)
+                region = region_for_smallest(depths, item['x'], item['z'])
+                if region:
+                    item['regions'] = list(region.get('owners') or [])
+            else:
+                item.pop('region', None)
+                if item['cat'] == 'towers' and item.get('internal'):
+                    try:
+                        item['tower'] = int(item['internal'][-2:])
+                    except ValueError:
+                        pass
+                else:
+                    region = region_for(towers, item['x'], item['z'])
+                    if region:
+                        item['tower'] = region['tower']
+        for region in towers + depths:
+            region.pop('_bbox', None)
+        log('reveal regions: %d tower regions, %d Depths regions, %d Lightroot owners'
+            % (len(towers), len(depths), len(owned)))
 
     # --- material sources -----------------------------------------------------
 
@@ -1239,6 +1370,7 @@ class Builder:
         self.build_material_sources()
         if not self.skip_map:
             self.build_map()
+            self.build_reveal_regions()
         self.extract_map_icons()
         # Copy the cooking data so the UI has a single self-contained folder.
         try:
