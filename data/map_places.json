@@ -1,0 +1,804 @@
+{
+ "villages": [
+  {
+   "id": "Gerudo",
+   "x": -3844.5,
+   "y": 149.17,
+   "z": 2926.2
+  },
+  {
+   "id": "Goron",
+   "x": 1657.25,
+   "y": 445.63,
+   "z": -2440.0
+  },
+  {
+   "id": "Hateno",
+   "x": 3545.03,
+   "y": 337.03,
+   "z": 2089.92
+  },
+  {
+   "id": "Kakariko",
+   "x": 1817.43,
+   "y": 224.46,
+   "z": 988.04
+  },
+  {
+   "id": "Cokiri",
+   "x": 419.0,
+   "y": 0.0,
+   "z": -2140.0
+  },
+  {
+   "id": "City_BaseCamp",
+   "x": -254.12,
+   "y": 123.45,
+   "z": -101.6
+  },
+  {
+   "id": "Taura",
+   "x": 3007.31,
+   "y": 142.5,
+   "z": 3473.63
+  },
+  {
+   "id": "Rito",
+   "x": -3620.76,
+   "y": 208.67,
+   "z": -1799.82
+  },
+  {
+   "id": "UMiiVillage",
+   "x": 3965.64,
+   "y": 233.24,
+   "z": -1611.18
+  },
+  {
+   "id": "WhiteZora",
+   "x": 3330.61,
+   "y": 242.66,
+   "z": -545.11
+  }
+ ],
+ "stables": [
+  {
+   "id": "FaronHatago000",
+   "x": 1760.78,
+   "y": 131.28,
+   "z": 1925.36
+  },
+  {
+   "id": "TamourHatago",
+   "x": 4230.52,
+   "y": 275.29,
+   "z": -2745.64
+  },
+  {
+   "id": "DeathMountainHatago",
+   "x": 2613.33,
+   "y": 253.79,
+   "z": -1143.51
+  },
+  {
+   "id": "GerudoHatago",
+   "x": -2803.81,
+   "y": 178.59,
+   "z": 2225.77
+  },
+  {
+   "id": "FaronHatago002",
+   "x": 529.6,
+   "y": 200.56,
+   "z": 3450.88
+  },
+  {
+   "id": "FaronHatago001",
+   "x": 1552.02,
+   "y": 210.56,
+   "z": 3537.84
+  },
+  {
+   "id": "HorseStableBranchOffice_Gerudo",
+   "x": -1693.16,
+   "y": 116.16,
+   "z": 1663.96
+  },
+  {
+   "id": "HorseStableBranchOffice_BaseCamp",
+   "x": -248.7,
+   "y": 124.51,
+   "z": -52.31
+  },
+  {
+   "id": "NewHyruleWestHatago",
+   "x": -1361.0,
+   "y": 191.5,
+   "z": -724.0
+  },
+  {
+   "id": "HyruleDepthHatago",
+   "x": -1449.49,
+   "y": 181.42,
+   "z": 1269.01
+  },
+  {
+   "id": "RiverSideHatago",
+   "x": 339.23,
+   "y": 145.31,
+   "z": 1095.3
+  },
+  {
+   "id": "TabantaHatago",
+   "x": -1654.88,
+   "y": 382.02,
+   "z": -2572.16
+  },
+  {
+   "id": "TamurulHatago_02",
+   "x": 3148.68,
+   "y": 338.64,
+   "z": -1691.45
+  },
+  {
+   "id": "TabantaBridgeHatago",
+   "x": -2931.57,
+   "y": 319.16,
+   "z": -547.6
+  },
+  {
+   "id": "NorthHatelHatago",
+   "x": 888.06,
+   "y": 175.97,
+   "z": 173.67
+  },
+  {
+   "id": "ForestHatago",
+   "x": 1062.3,
+   "y": 171.96,
+   "z": -1135.34
+  }
+ ],
+ "great_fairies": [
+  {
+   "id": "WeaponCureSpring_DressFairy_02",
+   "x": -1556.87,
+   "y": 181.51,
+   "z": 1231.13
+  },
+  {
+   "id": "WeaponCureSpring_DressFairy_01",
+   "x": -1460.47,
+   "y": 406.81,
+   "z": -2994.87
+  },
+  {
+   "id": "WeaponCureSpring",
+   "x": 915.69,
+   "y": 186.66,
+   "z": -1386.48
+  },
+  {
+   "id": "WeaponCureSpring_DressFairy_00",
+   "x": 1767.62,
+   "y": 106.05,
+   "z": 2179.93
+  }
+ ],
+ "labs": [
+  {
+   "id": "AncientLabo",
+   "x": 4522.01,
+   "y": 304.23,
+   "z": -3166.63
+  },
+  {
+   "id": "HatenoLabo",
+   "x": 3777.71,
+   "y": 335.31,
+   "z": 2127.36
+  }
+ ],
+ "dragon_tears": [
+  {
+   "id": "DragonTears05",
+   "x": -3178.37,
+   "y": 524.82,
+   "z": 1699.69,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears06",
+   "x": -3096.33,
+   "y": 317.02,
+   "z": 77.06,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears02",
+   "x": -2551.32,
+   "y": 425.12,
+   "z": -1888.54,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears08",
+   "x": -1863.69,
+   "y": 342.62,
+   "z": -3621.79,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears01",
+   "x": -1412.53,
+   "y": 229.68,
+   "z": -966.09,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears10",
+   "x": -649.33,
+   "y": 174.23,
+   "z": 2682.97,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears04",
+   "x": 694.63,
+   "y": 159.06,
+   "z": 1309.22,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears11",
+   "x": 892.03,
+   "y": 468.45,
+   "z": -2951.69,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears03",
+   "x": 1828.33,
+   "y": 195.41,
+   "z": -737.59,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears07",
+   "x": 3325.73,
+   "y": 110.58,
+   "z": 3566.45,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears09",
+   "x": 4467.7,
+   "y": 180.83,
+   "z": 304.99,
+   "display_name": "Dragon's Tear"
+  },
+  {
+   "id": "DragonTears12",
+   "x": 4534.68,
+   "y": 106.5,
+   "z": -2144.09,
+   "display_name": "Dragon's Tear"
+  }
+ ],
+ "dispensers": [
+  {
+   "id": "RBox_Field_E",
+   "x": -3803.23,
+   "y": 807.34,
+   "z": -2766.94,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_S",
+   "x": -3612.15,
+   "y": 1761.08,
+   "z": -1066.38,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_I",
+   "x": -3457.1,
+   "y": 2048.5,
+   "z": 373.7,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_I_02",
+   "x": -3455.31,
+   "y": 1799.55,
+   "z": -393.58,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_D",
+   "x": -2370.55,
+   "y": 716.08,
+   "z": -781.66,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_H",
+   "x": -1771.54,
+   "y": 1253.48,
+   "z": 2019.26,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_E_02",
+   "x": -1705.08,
+   "y": 1053.48,
+   "z": -3371.39,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_H_02",
+   "x": -1619.72,
+   "y": 107.48,
+   "z": 1888.98,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_D_02",
+   "x": -1212.89,
+   "y": 1112.43,
+   "z": 1585.25,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_M_02",
+   "x": 215.12,
+   "y": 859.69,
+   "z": -1981.92,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_A",
+   "x": 435.44,
+   "y": 1547.82,
+   "z": 1686.19,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_M",
+   "x": 443.36,
+   "y": 1925.48,
+   "z": -2821.77,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_B",
+   "x": 769.09,
+   "y": 1684.46,
+   "z": 1259.54,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_K_03",
+   "x": 1058.04,
+   "y": -447.98,
+   "z": 2320.7,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_K",
+   "x": 1104.48,
+   "y": 932.96,
+   "z": 3331.84,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_J",
+   "x": 1344.17,
+   "y": 689.98,
+   "z": 2151.28,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_J_02",
+   "x": 1390.92,
+   "y": 522.46,
+   "z": 3239.02,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_R",
+   "x": 1778.38,
+   "y": 1022.69,
+   "z": 1096.45,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_R_02",
+   "x": 1838.05,
+   "y": 260.22,
+   "z": 1093.63,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_F",
+   "x": 1983.38,
+   "y": 1355.68,
+   "z": -1221.95,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_F_02",
+   "x": 2190.61,
+   "y": -857.75,
+   "z": -2640.77,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_T",
+   "x": 2320.99,
+   "y": 1590.19,
+   "z": 1718.8,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_K_02",
+   "x": 2851.89,
+   "y": 1316.6,
+   "z": 2958.56,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_G_02",
+   "x": 2915.66,
+   "y": 1055.86,
+   "z": -502.28,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_C",
+   "x": 3430.2,
+   "y": 1421.6,
+   "z": -636.96,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_L",
+   "x": 3755.34,
+   "y": 1262.48,
+   "z": -1542.74,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_L_02",
+   "x": 3807.62,
+   "y": 195.45,
+   "z": -1561.54,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_G",
+   "x": 4510.6,
+   "y": 1221.7,
+   "z": 805.63,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_Q",
+   "x": 4557.79,
+   "y": 1259.6,
+   "z": -2076.31,
+   "display_name": "Device Dispenser"
+  },
+  {
+   "id": "RBox_Field_N",
+   "x": 4675.31,
+   "y": 1894.48,
+   "z": 1029.63,
+   "display_name": "Device Dispenser"
+  }
+ ],
+ "shops": [
+  {
+   "id": "ShopArmor_Rito",
+   "x": -3631.49,
+   "y": 292.22,
+   "z": -1787.28
+  },
+  {
+   "id": "ShopArmor_Gerudo",
+   "x": -3275.5,
+   "y": 200.0,
+   "z": 2552.0
+  },
+  {
+   "id": "ShopArmor_BaseCamp",
+   "x": -205.77,
+   "y": 125.37,
+   "z": -86.8
+  },
+  {
+   "id": "ShopArmor_Goron",
+   "x": 1642.87,
+   "y": 490.16,
+   "z": -2409.2
+  },
+  {
+   "id": "ShopArmor_Kakariko",
+   "x": 1854.69,
+   "y": 239.38,
+   "z": 981.32
+  },
+  {
+   "id": "ShopArmor_Hateno",
+   "x": 3356.95,
+   "y": 238.59,
+   "z": 2127.88
+  },
+  {
+   "id": "Bar",
+   "x": -3856.78,
+   "y": 153.73,
+   "z": 2857.14
+  },
+  {
+   "id": "BatteryExchangeShop_01",
+   "x": -219.2,
+   "y": 143.64,
+   "z": -191.85
+  },
+  {
+   "id": "BatteryExchangeShop_00",
+   "x": 357.17,
+   "y": 2410.96,
+   "z": 1651.34
+  },
+  {
+   "id": "ShopDye_Hateno",
+   "x": 3403.99,
+   "y": 238.59,
+   "z": 2152.26
+  },
+  {
+   "id": "ShopGeneral_Gerudo",
+   "x": -3857.55,
+   "y": 200.0,
+   "z": 2913.25
+  },
+  {
+   "id": "ShopGeneral_Gerudo",
+   "x": -3848.66,
+   "y": 199.99,
+   "z": 2903.62
+  },
+  {
+   "id": "ShopGeneral_Gerudo",
+   "x": -3823.02,
+   "y": 200.0,
+   "z": 2878.63
+  },
+  {
+   "id": "ShopGeneral_Gerudo",
+   "x": -3821.89,
+   "y": 199.99,
+   "z": 2936.29
+  },
+  {
+   "id": "ShopGeneral_Gerudo",
+   "x": -3819.99,
+   "y": 199.98,
+   "z": 2925.9
+  },
+  {
+   "id": "ShopGeneral_Rito",
+   "x": -3644.61,
+   "y": 289.88,
+   "z": -1820.46
+  },
+  {
+   "id": "ShopGeneral_Oasis",
+   "x": -3277.99,
+   "y": 200.0,
+   "z": 2564.53
+  },
+  {
+   "id": "ShopGeneral_Oasis",
+   "x": -3274.01,
+   "y": 200.0,
+   "z": 2536.0
+  },
+  {
+   "id": "ShopGeneral_Oasis",
+   "x": -3262.25,
+   "y": 200.0,
+   "z": 2604.25
+  },
+  {
+   "id": "ShopGeneral_BaseCamp",
+   "x": -205.77,
+   "y": 125.37,
+   "z": -76.56
+  },
+  {
+   "id": "ShopGeneral_Korok",
+   "x": 431.81,
+   "y": 258.36,
+   "z": -2174.0
+  },
+  {
+   "id": "ShopGeneral_Goron",
+   "x": 1683.58,
+   "y": 490.82,
+   "z": -2463.49
+  },
+  {
+   "id": "ShopGeneral_Kakariko",
+   "x": 1794.48,
+   "y": 235.04,
+   "z": 1029.26
+  },
+  {
+   "id": "ShopGeneral_Kakariko",
+   "x": 1825.86,
+   "y": 235.65,
+   "z": 1041.0
+  },
+  {
+   "id": "ShopGeneral_Uotori",
+   "x": 2959.36,
+   "y": 106.85,
+   "z": 3493.91
+  },
+  {
+   "id": "ShopGeneral_Zora",
+   "x": 3322.85,
+   "y": 245.46,
+   "z": -490.74
+  },
+  {
+   "id": "ShopGeneral_Hateno",
+   "x": 3360.78,
+   "y": 238.59,
+   "z": 2171.56
+  },
+  {
+   "id": "ShopGeneral_UMiiVillage",
+   "x": 4005.82,
+   "y": 234.08,
+   "z": -1634.15
+  },
+  {
+   "id": "ShopInn_Gerudo",
+   "x": -3850.25,
+   "y": 200.0,
+   "z": 2889.09
+  },
+  {
+   "id": "ShopInn_Rito",
+   "x": -3612.09,
+   "y": 289.03,
+   "z": -1852.53
+  },
+  {
+   "id": "ShopInn_Oasis",
+   "x": -3268.25,
+   "y": 200.0,
+   "z": 2609.9
+  },
+  {
+   "id": "ShopInn_Korok",
+   "x": 410.87,
+   "y": 259.63,
+   "z": -2171.22
+  },
+  {
+   "id": "ShopInn_Goron",
+   "x": 1682.05,
+   "y": 489.24,
+   "z": -2424.02
+  },
+  {
+   "id": "ShopInn_Kakariko",
+   "x": 1835.57,
+   "y": 240.0,
+   "z": 1021.77
+  },
+  {
+   "id": "ShopInn_Uotori",
+   "x": 2944.61,
+   "y": 134.65,
+   "z": 3437.03
+  },
+  {
+   "id": "ShopInn_Zora",
+   "x": 3296.23,
+   "y": 245.86,
+   "z": -508.53
+  },
+  {
+   "id": "ShopInn_Hateno",
+   "x": 3473.25,
+   "y": 247.29,
+   "z": 2111.21
+  },
+  {
+   "id": "ShopInn_UMiiVillage",
+   "x": 3999.54,
+   "y": 234.93,
+   "z": -1596.02
+  },
+  {
+   "id": "ShopJewelry_Gerudo",
+   "x": -3836.8,
+   "y": 200.0,
+   "z": 2877.07
+  },
+  {
+   "id": "TreasureBoxShop",
+   "x": 2969.92,
+   "y": 135.36,
+   "z": 3377.71
+  },
+  {
+   "id": "CookingShop",
+   "x": 2895.14,
+   "y": 116.8,
+   "z": 3409.98
+  },
+  {
+   "id": "ForgeShopGolem",
+   "x": 1356.91,
+   "y": -631.97,
+   "z": 3375.75
+  }
+ ],
+ "challenges": [
+  {
+   "id": "GamettaPlateau",
+   "x": 2600.78,
+   "y": 0.0,
+   "z": 1779.89
+  },
+  {
+   "id": "ValleyVillage",
+   "x": -3852.73,
+   "y": 95.32,
+   "z": -2289.99
+  },
+  {
+   "id": "GameGutsCriff",
+   "x": 2685.93,
+   "y": 302.05,
+   "z": -3471.15
+  },
+  {
+   "id": "RentalZarashiShop_GerudoDesert",
+   "x": -2995.23,
+   "y": 105.0,
+   "z": 2325.02
+  },
+  {
+   "id": "GameShiledSurf",
+   "x": -2952.03,
+   "y": 656.2,
+   "z": -3142.86
+  },
+  {
+   "id": "SouthGerudoRuinsCamp",
+   "x": -3647.43,
+   "y": 121.33,
+   "z": 3668.18
+  },
+  {
+   "id": "Circuit_Ichikara",
+   "x": 3744.3,
+   "y": 198.19,
+   "z": -1679.45
+  },
+  {
+   "id": "GameBitalockGolf",
+   "x": -3128.23,
+   "y": 26.32,
+   "z": -611.15
+  }
+ ]
+}

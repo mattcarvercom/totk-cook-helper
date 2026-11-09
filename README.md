@@ -131,8 +131,11 @@ The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
-map. **Reveal full map** is off by default, so the map starts with the
-areas you have revealed in the game. The Sky layer blends its cloud sheet with
+map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
+dispensers, challenges and landmarks are separate map layers, each with its
+game marker art. **Reveal full map** is off by default, so the map starts with
+the terrain you have revealed in the game. The fog only covers terrain; markers
+remain visible over unexplored areas. The Sky layer blends its cloud sheet with
 the Surface map so roads and terrain remain visible underneath. Surface and Sky
 use the Skyview Tower region boundaries, and the Depths reveal the Field Map
 Area around each activated Lightroot, so the shapes are regions rather than
@@ -140,8 +143,9 @@ circles. Travel
 Medallions have their own toggle in the left pane, appear only on their layer,
 and use the game's medallion art without a background plate. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
-current layer, with a point and distance summary. Link's map marker has a
-continuous expanding sonar ring. The map cursor shows X, Y and Z in Purah Pad
+current layer, with a point and distance summary. Link's marker gives a short
+sonar ping when the Map tab opens, when the map switches to Link's layer, or
+when **Link** is pressed. The map cursor shows X, Y and Z in Purah Pad
 order, using the game's terrain height grids for Z. Marker details and
 **Near Link** or **Results** are on the right, with game-style X/Y/Z
 coordinates and a direction arrow from Link. Empty detail or Nearby panels are
@@ -188,8 +192,7 @@ wheel for Stamina Recovery recipes and a level-specific amount for effects such
 as Stealth Up or Attack Up. When worn armor has the same effect, it also shows
 the combined level with current gear. New installs start with spoiler-free
 filters: Found map markers, photographed compendium entries, found progress
-entries, and the map limited to revealed
-areas.
+entries, and the map terrain limited to revealed areas.
 
 Each tab remembers its filters and view choices across restarts. **Reset
 filters** in Settings restores the spoiler-free defaults. Settings also chooses

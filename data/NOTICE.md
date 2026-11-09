@@ -1,7 +1,9 @@
 # Third-party data
 
 `collectibles.json` contains coordinates and completion hashes for Tears of the
-Kingdom collectibles. `map_regions.json` contains the surface Skyview Tower
+Kingdom collectibles. `map_places.json` contains coordinates for villages,
+stables, Great Fairies, tech labs, shops, Dragon's Tears, device dispensers and
+challenge markers. `map_regions.json` contains the surface Skyview Tower
 regions and the Depths Field Map Areas used for map reveal. The values are facts
 about the game and were compiled from the community projects below. No game art
 or game files are included.
@@ -11,8 +13,10 @@ or game files are included.
 - [lud99/totk-unexplored](https://github.com/lud99/totk-unexplored) for the
   collected and checked coordinate data.
 - [zeldamods/objmap-totk](https://github.com/zeldamods/objmap-totk) for the
-  Skyview Tower region polygons and Depths Field Map Area polygons, extracted
-  from the game's own map data, and
+  Skyview Tower region polygons, Depths Field Map Area polygons, and the
+  village, stable, Great Fairy, tech lab, shop, Dragon's Tear, device
+  dispenser and challenge marker coordinates, extracted from the game's own
+  map data, and
   [zeldamods/radar-totk](https://github.com/zeldamods/radar-totk) for the
   underlying object data.
 

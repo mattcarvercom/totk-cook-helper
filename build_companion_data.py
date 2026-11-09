@@ -131,7 +131,15 @@ CATEGORIES = {
     'hidden_koroks': {'label': 'Korok seeds', 'color': '#9ee06e', 'icon': 'korok', 'kind': 'korok'},
     'carry_koroks': {'label': 'Korok friends', 'color': '#c8e887', 'icon': 'korok', 'kind': 'korok'},
     'bubbuls': {'label': 'Bubbuls', 'color': '#f4a259', 'icon': 'bubbul', 'kind': 'bubbul'},
-    'locations': {'label': 'Locations', 'color': '#e8dcc0', 'icon': 'location', 'kind': 'location'},
+    'locations': {'label': 'Landmarks', 'color': '#e8dcc0', 'icon': 'location', 'kind': 'location'},
+    'villages': {'label': 'Villages', 'color': '#f0d77a', 'icon': 'location', 'kind': 'place'},
+    'stables': {'label': 'Stables', 'color': '#e8c56a', 'icon': 'location', 'kind': 'place'},
+    'great_fairies': {'label': 'Great Fairies', 'color': '#f4a6d7', 'icon': 'location', 'kind': 'place'},
+    'labs': {'label': 'Tech Labs', 'color': '#9fd0ff', 'icon': 'location', 'kind': 'place'},
+    'shops': {'label': 'Shops', 'color': '#d6c38a', 'icon': 'location', 'kind': 'place'},
+    'dragon_tears': {'label': "Dragon's Tears", 'color': '#e97a6a', 'icon': 'location', 'kind': 'place'},
+    'dispensers': {'label': 'Device Dispensers', 'color': '#9bd4a8', 'icon': 'location', 'kind': 'place'},
+    'challenges': {'label': 'Challenges', 'color': '#e97a6a', 'icon': 'location', 'kind': 'place'},
     'caves': {'label': 'Caves', 'color': '#d99a6c', 'icon': 'cave', 'kind': 'cave'},
     'wells': {'label': 'Wells', 'color': '#8fc6c8', 'icon': 'well', 'kind': 'well'},
     'chasms': {'label': 'Chasms', 'color': '#b47fd0', 'icon': 'chasm', 'kind': 'chasm'},
@@ -148,6 +156,25 @@ CATEGORIES = {
     'yiga_schematics': {'label': 'Yiga schematics', 'color': '#d98f8f', 'icon': 'yiga', 'kind': 'treasure'},
 }
 
+# Place markers come from the game's LocationArea data and are map layers only;
+# they are not part of the completion percentage.
+MAP_PLACE_ORDER = ('villages', 'stables', 'great_fairies', 'labs', 'shops',
+                   'dragon_tears', 'dispensers', 'challenges')
+MAP_ONLY_KEYS = set(MAP_PLACE_ORDER)
+SKIP_LOCATION_NAMES = {
+    'Lookout Landing', 'Korok Forest', 'Gerudo Town', 'Goron City',
+    'Hateno Village', 'Kakariko Village', 'Rito Village', 'Lurelin Village',
+    'Tarrey Town', "Zora's Domain", 'Great Fairy Fountain', "Dragon's Tear",
+    'Device Dispenser', 'Hateno Ancient Tech Lab', 'Tarrey Town Race',
+    'Ultra Ball Haul Check-In', "Selmie's Spot", 'Gut Check Rock',
+    'Flight Range', 'Southern Oasis Training Area', 'Sand-Seal Rental Shop',
+    'Break-a-Part Shop',
+}
+
+def skip_location_marker(row):
+    name = row.get('display_name') or row.get('internal_name') or ''
+    return name.endswith('Stable') or name in SKIP_LOCATION_NAMES
+
 # Map marker textures from UI/LayoutArchive/Common.blarc, timg/__Combined.bntx.
 # These are the game's own map icon shapes; each is tinted with its category color.
 MAP_ICON_SOURCES = {
@@ -158,6 +185,14 @@ MAP_ICON_SOURCES = {
     'carry_koroks': 'MapIconKorok_x2',
     'bubbuls': 'MapIconCaveM_72x72',
     'locations': 'MapIconFrontierPoint_64x64',
+    'villages': 'MapIconBuildingVillage_58x58',
+    'stables': 'MapIconBuildingStableInn_58x58',
+    'great_fairies': 'MapIconFairy_72x72',
+    'labs': 'Nt_MapReserchCenter_00',
+    'shops': 'MapIconShopGeneral_58x58',
+    'dragon_tears': 'MapIconDragonTears_00',
+    'dispensers': 'MapIconRecycleBox_00',
+    'challenges': 'Nt_MapChallengeIcon_00',
     'caves': 'MapIconCaveM_72x72',
     'wells': 'MapIconCaveS_72x72',
     'chasms': 'MapIconCaveL_72x72',
@@ -759,17 +794,32 @@ class Builder:
 
     def build_collectibles(self):
         src = json.load(open(os.path.join(DATA, 'collectibles.json'), encoding='utf-8'))
+        places_path = os.path.join(DATA, 'map_places.json')
+        if os.path.isfile(places_path):
+            places = json.load(open(places_path, encoding='utf-8'))
+            ordered = {}
+            for key, rows in src.items():
+                ordered[key] = rows
+                if key == 'locations':
+                    for pkey in MAP_PLACE_ORDER:
+                        if pkey in places:
+                            ordered[pkey] = places[pkey]
+            src = ordered
         items = []
         categories = []
         for key, rows in src.items():
             meta = CATEGORIES.get(key)
             if not meta:
                 continue
+            if key == 'locations':
+                rows = [row for row in rows if not skip_location_marker(row)]
             cat = {'key': key, 'label': meta['label'], 'color': meta['color'], 'icon': meta['icon'],
                    'kind': meta['kind'], 'total': len(rows)}
+            if key in MAP_ONLY_KEYS:
+                cat['map_only'] = True
             categories.append(cat)
             for i, row in enumerate(rows):
-                pos = row.get('position') or {}
+                pos = row.get('position') or row
                 y = float(pos.get('y', 0) or 0)
                 if key == 'lightroots':
                     layer = 'depths'
@@ -781,7 +831,11 @@ class Builder:
                     layer = 'sky'
                 else:
                     layer = 'surface'
-                name = row.get('display_name') or row.get('internal_name')
+                name = row.get('display_name')
+                if not name and row.get('id'):
+                    name = self.location_text.get(str(row['id']))
+                if not name:
+                    name = row.get('internal_name')
                 if not name:
                     if key == 'hidden_koroks':
                         name = row.get('type') or 'Korok seed'
@@ -799,8 +853,9 @@ class Builder:
                     'layer': layer,
                     'kind': meta['kind'],
                 }
-                if row.get('internal_name'):
-                    item['internal'] = row['internal_name']
+                internal = row.get('internal_name') or row.get('id')
+                if internal:
+                    item['internal'] = str(internal)
                 if 'completion_hash' in row:
                     item['hash'] = int(row['completion_hash']) & 0xffffffff
                 elif 'guid_hash' in row:

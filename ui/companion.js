@@ -17,7 +17,7 @@ const S = {
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
          reveal: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null,
-         iconImages: {}, activeReveal: null, activeRevealFor: null,
+         iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
          miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'found', filter: '' },
@@ -382,6 +382,7 @@ function catMeta(key) {
   for (const c of (cat().collectible_categories || [])) if (c.key === key) return c;
   return { key: key, label: key, color: '#dcc890', kind: 'dot' };
 }
+function mapOnly(key) { return !!catMeta(key).map_only; }
 function ainfo(actor) { return (cat().actors || {})[actor] || {}; }
 function invCat(key) {
   const list = (dyn().inventory || []);
@@ -427,8 +428,9 @@ const EFFECT_MAX_LEVEL = { ResistCold: 2, ResistHot: 2, ResistBurn: 2, ResistEle
                            MiasmaGuard: 3, LightEmission: 3, NotSlippy: 3, SwimSpeedUp: 3 };
 const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: 'armor', materials: 'material',
                      food: 'meal', zonai: 'device', keyitems: 'key item' };
-const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
-                          'sages_wills', 'schema_stones'];
+const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'villages', 'stables',
+                          'great_fairies', 'labs', 'challenges', 'wells', 'chasms',
+                          'old_maps', 'sages_wills', 'schema_stones'];
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -459,9 +461,15 @@ function restoreUiState(raw) {
     const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
     S.map.cats = new Set(map.cats.filter((k) => valid.has(k)));
   }
+  if (Number(map.cat_version || 1) < 2) {
+    for (const k of ['villages', 'stables', 'great_fairies', 'labs', 'challenges']) {
+      if ((cat().collectible_categories || []).some((c) => c.key === k)) S.map.cats.add(k);
+    }
+  }
 
   const progress = raw.progress || {};
-  const pcats = new Set(['overview'].concat((cat().collectible_categories || []).map((c) => c.key)));
+  const pcats = new Set(['overview'].concat((cat().collectible_categories || [])
+    .filter((c) => !c.map_only).map((c) => c.key)));
   if (pcats.has(progress.cat)) S.progress.cat = progress.cat;
   if (PROGRESS_MODES.includes(progress.mode)) S.progress.mode = progress.mode;
   if (typeof progress.filter === 'string') S.progress.filter = progress.filter;
@@ -485,7 +493,7 @@ function uiState() {
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
            reveal: S.map.reveal, medals: S.map.medals, path: S.map.path,
-           search: S.map.search, cats: [...S.map.cats] },
+           search: S.map.search, cats: [...S.map.cats], cat_version: 2 },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
     cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort, all: S.cook.all },
@@ -1633,10 +1641,12 @@ function mapVisible() {
     if (it.layer !== S.map.layer) continue;
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
-    if (S.map.found === 'missing' && st !== 0) continue;
-    if (S.map.found === 'found' && st === 0) continue;
-    if (!isItemRevealed(it)) continue;
-    out.push({ item: it, index: i, state: st });
+    const only = mapOnly(it.cat);
+    if (!only) {
+      if (S.map.found === 'missing' && st !== 0) continue;
+      if (S.map.found === 'found' && st === 0) continue;
+    }
+    out.push({ item: it, index: i, state: st, mapOnly: only });
   }
   return out;
 }
@@ -1649,12 +1659,14 @@ function searchResults() {
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
     const st = states[i] || 0;
-    if (S.map.found === 'missing' && st !== 0) continue;
-    if (S.map.found === 'found' && st === 0) continue;
-    if (!isItemRevealed(it)) continue;
+    const only = mapOnly(it.cat);
+    if (!only) {
+      if (S.map.found === 'missing' && st !== 0) continue;
+      if (S.map.found === 'found' && st === 0) continue;
+    }
     const score = Math.max(fuzzyScore(q, it.name),
                            fuzzyScore(q, catMeta(it.cat).label) * 0.55);
-    if (score > 0) out.push({ item: it, index: i, state: st, score: score });
+    if (score > 0) out.push({ item: it, index: i, state: st, score: score, mapOnly: only });
   }
   out.sort((a, b) => b.score - a.score ||
     (p ? dist3(p, a.item) - dist3(p, b.item) : 0) ||
@@ -1680,16 +1692,6 @@ function activeRevealSets() {
   S.map.activeReveal = { towers, depths };
   S.map.activeRevealFor = comp;
   return S.map.activeReveal;
-}
-
-function isItemRevealed(item) {
-  if (S.map.reveal || !cat().map_regions) return true;
-  const active = activeRevealSets();
-  if (item.layer === 'depths') {
-    if (item.regions) return item.regions.some((r) => active.depths.has(r));
-    return !item.region || active.depths.has(item.region);
-  }
-  return !item.tower || active.towers.has(String(item.tower));
 }
 
 function activeRevealRegions() {
@@ -1746,6 +1748,7 @@ function setMapLayer(layer, keep) {
   renderMapDetail();
   renderNearby();
   loadMapImage();
+  if (layer === playerLayer()) showPlayerPing();
   drawMap();
 }
 function loadMapImage() {
@@ -1765,6 +1768,10 @@ function loadMapImage() {
     mini.src = src;
   }
   $('#map-loading').hidden = false;
+  img.onerror = () => {
+    $('#map-loading').hidden = true;
+    drawMap();
+  };
   img.onload = () => {
     $('#map-loading').hidden = true;
     if (S.map.pending) { const p = S.map.pending; S.map.pending = null; centerOnItem(p); }
@@ -1793,6 +1800,7 @@ function renderMap() {
   if (S.map.path && !S.map.pathData) {
     ensureHeroPath().then(() => drawMap());
   }
+  if (S.map.layer === playerLayer()) showPlayerPing();
   requestAnimationFrame(() => { if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; } else drawMap(); });
 }
 function renderMapToolbar() {
@@ -1875,8 +1883,9 @@ function renderMapCats() {
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
       : '';
+    const count = c.map_only ? n.total : `${n.complete}/${n.total}`;
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
-      `${marker}<span>${esc(c.label)}</span><span class="n">${n.complete}/${n.total}</span></button>`;
+      `${marker}<span>${esc(c.label)}</span><span class="n">${count}</span></button>`;
   }).join('');
 }
 function renderMapDetail() {
@@ -1889,17 +1898,19 @@ function renderMapDetail() {
     const idx = (cat().collectibles || []).indexOf(item);
     const st = mapItemState(idx);
     const meta = catMeta(item.cat);
+    const only = !!meta.map_only;
     const p = playerPos();
     const d = p ? dist3(p, item) : null;
     const deg = p ? bearing(p, item) : null;
     const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
     const iconFile = mapIconFile(item.cat, st);
     el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
-      `<div class="k">Status</div><div class="v">${state}</div>` +
+      (only ? '' : `<div class="k">Status</div><div class="v">${state}</div>`) +
       `<div class="k">Position</div><div class="v">${fmtXYZ(item.x, item.y, item.z)}</div>` +
       (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
       `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">${micon('my-location', '', 'sm')} Center</button>` +
-      `<button class="btn" data-mprogress="${esc(item.cat)}">${micon('format-list-bulleted', '', 'sm')} All ${esc(meta.label.toLowerCase())}</button></div>`;
+      (only ? '' : `<button class="btn" data-mprogress="${esc(item.cat)}">${micon('format-list-bulleted', '', 'sm')} All ${esc(meta.label.toLowerCase())}</button>`) +
+      `</div>`;
     return;
   }
   if (S.map.sourceSel !== null && S.map.sources[S.map.sourceSel]) {
@@ -1953,16 +1964,10 @@ function renderResultsNote(searching) {
   const note = $('#map-results-note');
   if (!note) return;
   if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
-  const bits = [];
-  if (S.map.found !== 'all') {
-    bits.push(`<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>`);
-  }
-  if (!S.map.reveal && cat().map_regions) bits.push('<span>explored areas only</span>');
-  if (!bits.length) { note.hidden = true; note.innerHTML = ''; return; }
+  if (S.map.found === 'all') { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<span>${bits.join(' · ')}</span>` +
-    (S.map.found !== 'all' ? '<button data-maprelax="found">Show all types</button>' : '') +
-    (!S.map.reveal && cat().map_regions ? '<button data-maprelax="reveal">Show full map</button>' : '');
+  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>` +
+    '<button data-maprelax="found">Show all types</button>';
 }
 
 function renderNearby() {
@@ -1995,13 +2000,15 @@ function renderNearby() {
     const d = p ? dist3(p, x.item) : null;
     const deg = p ? bearing(p, x.item) : null;
     const meta = catMeta(x.item.cat);
-    const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
+    const only = !!meta.map_only;
+    const state = only ? '' : x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
     const iconFile = mapIconFile(x.item.cat, x.state);
-    const layer = x.item.layer !== S.map.layer ? ` · ${layerLabel(x.item.layer)}` : '';
+    const layer = x.item.layer !== S.map.layer ? layerLabel(x.item.layer) : '';
+    const metaText = [meta.label, state, layer].filter(Boolean).join(' · ');
     return `<button data-midx="${x.index}">` +
       (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
       `<span><span>${esc(x.item.name)}</span>` +
-      `<span class="meta">${esc(meta.label)} · ${state}${esc(layer)}</span></span>` +
+      `<span class="meta">${esc(metaText)}</span></span>` +
       `<span class="dist">${dirIcon(deg)}${d === null ? '' : ` ${fmtDist(d)}`}</span></button>`;
   }).join('');
 }
@@ -2111,7 +2118,21 @@ function centerOnPlayer() {
   S.map.pending = null;
   S.map.fitted = true;
   applyMap();
+  showPlayerPing();
   drawMap();
+}
+function showPlayerPing(ms) {
+  if (!playerPos()) return;
+  const duration = ms || 3200;
+  S.map.pingUntil = performance.now() + duration;
+  if (S.map.pingTimer) clearTimeout(S.map.pingTimer);
+  S.map.pingTimer = setTimeout(() => {
+    S.map.pingTimer = 0;
+    S.map.pingUntil = 0;
+    const el = $('#player-ping');
+    if (el) el.hidden = true;
+  }, duration);
+  requestDraw();
 }
 function requestDraw() {
   if (S.map.raf) return;
@@ -2195,8 +2216,9 @@ function drawMap() {
   // Link's position, only on the layer he is actually on.
   const pos = playerPos();
   const ping = $('#player-ping');
+  const pingActive = S.map.pingUntil > performance.now();
   let pingShown = false;
-  if (pos && S.map.layer === playerLayer()) {
+  if (pingActive && pos && S.map.layer === playerLayer()) {
     const sx = S.map.tx + pr.x(pos.x) * S.map.zoom;
     const sy = S.map.ty + pr.y(pos.z) * S.map.zoom;
     if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) {
@@ -2463,9 +2485,6 @@ function drawPlayer(ctx, x, y) {
   ctx.beginPath();
   ctx.moveTo(0, -11); ctx.lineTo(8, 8); ctx.lineTo(0, 4); ctx.lineTo(-8, 8); ctx.closePath();
   ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,232,170,.55)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }
 function mapHitTest(clientX, clientY) {
@@ -2907,8 +2926,10 @@ function attachStatic() {
   if (sourcesModal) sourcesModal.addEventListener('click', (e) => { if (e.target === sourcesModal) closeSources(); });
 
   const vp = $('#map-viewport');
+  const ignoreMapDrag = (target) => target && target !== vp && target.closest &&
+    !!target.closest('.map-zoom, .minimap, button, input, select, label');
   vp.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || ignoreMapDrag(e.target)) return;
     S.map.drag = { x: e.clientX, y: e.clientY, tx: S.map.tx, ty: S.map.ty, moved: false };
     vp.classList.add('grabbing');
     try { vp.setPointerCapture(e.pointerId); } catch (err) {}
@@ -2938,7 +2959,7 @@ function attachStatic() {
   // missing. Keep map panning and marker clicks working there too.
   if (!('PointerEvent' in window)) {
     vp.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || ignoreMapDrag(e.target)) return;
       e.preventDefault();
       S.map.drag = { x: e.clientX, y: e.clientY, tx: S.map.tx, ty: S.map.ty, moved: false };
       vp.classList.add('grabbing');
@@ -3002,8 +3023,16 @@ function attachStatic() {
   });
 }
 
+function closestButton(node) {
+  while (node && node !== document) {
+    if (node.nodeType === 1 && node.tagName === 'BUTTON') return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('button');
+  const t = closestButton(e.target);
   if (!t) return;
   if (t.dataset.page) { showPage(t.dataset.page); return; }
   if (t.dataset.pageGo) { showPage(t.dataset.pageGo); return; }

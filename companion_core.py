@@ -506,6 +506,8 @@ class Save:
             states.append(state)
         cats = []
         for cat in self.catalog.get('collectible_categories', []):
+            if cat.get('map_only'):
+                continue
             idx = [i for i, item in enumerate(self.collectibles) if item['cat'] == cat['key']]
             complete = sum(1 for i in idx if states[i] >= 2)
             started = sum(1 for i in idx if states[i] == 1)
