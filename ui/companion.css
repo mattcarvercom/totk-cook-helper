@@ -198,7 +198,11 @@ body { overflow: hidden; }
 .detail .durable .bar { flex: 1; height: 7px; margin: 0; }
 
 /* ---------- map ---------- */
-.map-layout { height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); }
+.map-layout { height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(205px, 235px) minmax(0, 1fr) minmax(280px, 330px); }
+.map-left { min-height: 0; overflow-y: auto; border-right: 1px solid var(--line-soft); padding: 12px 12px 18px; scrollbar-width: thin; scrollbar-color: rgba(214,196,140,.3) transparent; }
+.map-left .seg { display: flex; width: 100%; margin-bottom: 9px; }
+.map-left .seg button { flex: 1; padding: 5px 5px; font-size: 12.5px; }
+.map-left .map-cats { margin-bottom: 0; }
 .map-main { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); padding: 10px 10px 10px 12px; }
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 8px; }
 .map-search { flex: 1 1 170px; max-width: 260px; height: 32px; }
@@ -331,7 +335,7 @@ body { overflow: hidden; }
 @media (max-width: 1060px) {
   .minimap { width: 150px; height: 125px; }
   .split { grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); }
-  .map-layout { grid-template-columns: minmax(0, 1fr) minmax(270px, 310px); }
+  .map-layout { grid-template-columns: minmax(185px, 205px) minmax(0, 1fr) minmax(255px, 285px); }
 }
 @media (max-width: 860px) {
   .topbar { grid-template-columns: auto 1fr auto; gap: 8px; }
@@ -341,9 +345,10 @@ body { overflow: hidden; }
   .split { grid-template-columns: 1fr; grid-template-rows: minmax(190px, 46%) minmax(0, 1fr); }
   .pane-main { padding-left: 10px; }
   .detail { border-top: 1px solid var(--line-soft); padding-top: 12px; }
-  .map-layout { grid-template-columns: 1fr; grid-template-rows: minmax(250px, 54%) minmax(0, 1fr); }
-  .map-side { border-left: 0; border-top: 1px solid var(--line-soft); }
-  .map-main { padding: 8px; }
+  .map-layout { grid-template-columns: 1fr; grid-template-rows: minmax(250px, 54%) auto auto; overflow-y: auto; }
+  .map-main { order: 1; padding: 8px; }
+  .map-left { order: 2; max-height: 260px; border-right: 0; border-top: 1px solid var(--line-soft); }
+  .map-side { order: 3; max-height: 320px; border-left: 0; border-top: 1px solid var(--line-soft); }
   .hero { grid-template-columns: 1fr; }
   .hero .rupees { text-align: left; }
 }

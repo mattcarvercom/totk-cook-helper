@@ -35,6 +35,7 @@ DEFAULTS = {
     'start_hidden': False,
     'tab': 'status',
     'save_path': '',
+    'ui_state': {},
 }
 
 KIND_NAMES = {'CookMeat': 'Meat', 'CookFish': 'Fish', 'CookMushroom': 'Mushroom', 'CookFruit': 'Fruit',
@@ -286,6 +287,10 @@ class App:
 
     def set_setting(self, key, value):
         if key not in DEFAULTS:
+            return
+        if key == 'ui_state':
+            self.s[key] = value if isinstance(value, dict) else {}
+            save_settings(self.s)
             return
         self.s[key] = value
         if key == 'on_top' and self.window:

@@ -203,6 +203,74 @@ function renderNav() {
   nav.querySelectorAll('svg').forEach((s) => { s.style.width = '16px'; s.style.height = '16px'; s.style.fill = 'none'; s.style.stroke = 'currentColor'; });
 }
 
+const INV_KEYS = ['weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
+const MAP_LAYERS = ['surface', 'sky', 'depths'];
+const MAP_FOUND = ['all', 'missing', 'found'];
+const PROGRESS_MODES = ['all', 'missing', 'found'];
+const COMP_STATES = ['', 'Unopened', 'TakePhoto', 'Buy'];
+
+function restoreUiState(raw) {
+  if (!raw || typeof raw !== 'object') return;
+  const inv = raw.inv || {};
+  if (INV_KEYS.includes(inv.cat)) S.inv.cat = inv.cat;
+  if (typeof inv.filter === 'string') S.inv.filter = inv.filter;
+
+  const armor = raw.armor || {};
+  if (armor.slot === '' || ['Head', 'Upper', 'Lower'].includes(armor.slot)) S.armor.slot = armor.slot;
+  if (typeof armor.owned === 'boolean') S.armor.owned = armor.owned;
+  if (typeof armor.set === 'string' &&
+      (!armor.set || (cat().armor_sets || []).some((s) => s.key === armor.set))) S.armor.set = armor.set;
+  if (typeof armor.filter === 'string') S.armor.filter = armor.filter;
+
+  const map = raw.map || {};
+  if (MAP_LAYERS.includes(map.layer)) { S.map.layer = map.layer; S.map.layerSet = true; }
+  if (MAP_FOUND.includes(map.found)) S.map.found = map.found;
+  if (typeof map.search === 'string') S.map.search = map.search;
+  if (Array.isArray(map.cats)) {
+    const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
+    S.map.cats = new Set(map.cats.filter((k) => valid.has(k)));
+  }
+
+  const progress = raw.progress || {};
+  const pcats = new Set(['overview'].concat((cat().collectible_categories || []).map((c) => c.key)));
+  if (pcats.has(progress.cat)) S.progress.cat = progress.cat;
+  if (PROGRESS_MODES.includes(progress.mode)) S.progress.mode = progress.mode;
+  if (typeof progress.filter === 'string') S.progress.filter = progress.filter;
+
+  const comp = raw.comp || {};
+  const groups = new Set((cat().compendium || []).map((x) => x.group));
+  if (typeof comp.group === 'string' && (!comp.group || groups.has(comp.group))) S.comp.group = comp.group;
+  if (COMP_STATES.includes(comp.state)) S.comp.state = comp.state;
+  if (typeof comp.filter === 'string') S.comp.filter = comp.filter;
+
+  const cook = raw.cook || {};
+  if (typeof cook.filter === 'string') S.cook.filter = cook.filter;
+  if (typeof cook.fx === 'string') S.cook.fx = cook.fx;
+  if (typeof cook.sort === 'string' && SORT_FN[cook.sort]) S.cook.sort = cook.sort;
+}
+
+function uiState() {
+  return {
+    inv: { cat: S.inv.cat, filter: S.inv.filter },
+    armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
+    map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found, search: S.map.search,
+           cats: [...S.map.cats] },
+    progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
+    comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
+    cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort },
+  };
+}
+
+let uiSaveTimer = 0;
+function saveUiState() {
+  if (uiSaveTimer) { clearTimeout(uiSaveTimer); uiSaveTimer = 0; }
+  call('set_setting', 'ui_state', uiState());
+}
+function saveUiStateSoon() {
+  if (uiSaveTimer) clearTimeout(uiSaveTimer);
+  uiSaveTimer = setTimeout(saveUiState, 350);
+}
+
 async function start() {
   const boot = await call('bootstrap');
   if (!boot || !boot.catalog) { setTimeout(start, 250); return; }
@@ -212,15 +280,23 @@ async function start() {
   S.selectedSave = boot.selected_save || '';
   S.page = S.settings.tab || 'status';
   if (!NAV.some((x) => x[0] === S.page)) S.page = 'status';
+  restoreUiState(S.settings.ui_state);
   // Keep the first map readable; the sidebar can show every category.
-  const defaults = ['shrines', 'lightroots', 'wells', 'chasms', 'old_maps', 'sages_wills',
-                    'schema_stones'];
-  for (const c of defaults) S.map.cats.add(c);
-  for (const c of (cat().collectible_categories || [])) if (!defaults.includes(c.key)) S.map.cats.delete(c.key);
+  const savedCats = S.settings.ui_state && S.settings.ui_state.map &&
+                    Array.isArray(S.settings.ui_state.map.cats);
+  if (!savedCats) {
+    const defaults = ['shrines', 'lightroots', 'wells', 'chasms', 'old_maps', 'sages_wills',
+                      'schema_stones'];
+    for (const c of defaults) S.map.cats.add(c);
+  }
   loadMapIcons();
   renderNav();
   renderSaves();
   attachStatic();
+  document.addEventListener('click', saveUiStateSoon);
+  document.addEventListener('input', saveUiStateSoon);
+  document.addEventListener('change', saveUiStateSoon);
+  window.addEventListener('beforeunload', saveUiState);
   await poll(true);
   showPage(S.page, true);
 }
@@ -430,6 +506,7 @@ function invCell(it, selected) {
 
 function renderInventory() {
   const categories = dyn().inventory || [];
+  if (categories.length && !categories.some((c) => c.key === S.inv.cat)) S.inv.cat = categories[0].key;
   $('#inv-cats').innerHTML = categories.map((c) =>
     `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"><span>${esc(c.label)}</span><span class="c">${c.items.length}</span></button>`).join('');
   const current = invCat(S.inv.cat);
@@ -573,6 +650,7 @@ function armorCell(p, selected) {
 
 function renderArmor() {
   const pieces = armorPieces();
+  if (S.armor.set && !(cat().armor_sets || []).some((s) => s.key === S.armor.set)) S.armor.set = '';
   const slots = [['', 'All'], ['Head', 'Head'], ['Upper', 'Body'], ['Lower', 'Legs']];
   $('#armor-slots').innerHTML = slots.map(([k, l]) => {
     const n = k ? pieces.filter((p) => p.slot === k).length : pieces.length;
@@ -1538,6 +1616,7 @@ function compGroups() {
 }
 function renderCompendium() {
   const groups = compGroups();
+  if (S.comp.group && !(S.comp.group in groups)) S.comp.group = '';
   $('#comp-groups').innerHTML = `<button class="fxchip" data-cgroup="" aria-pressed="${S.comp.group === ''}"><span>All</span><span class="c">${(cat().compendium || []).length}</span></button>` +
     Object.keys(groups).sort().map((g) => `<button class="fxchip" data-cgroup="${esc(g)}" aria-pressed="${S.comp.group === g}"><span>${esc(g)}</span><span class="c">${groups[g]}</span></button>`).join('');
   $('#comp-states').innerHTML = [['', 'All'], ['Unopened', 'Unopened'], ['TakePhoto', 'Photographed'], ['Buy', 'Purchased']].map(([k, l]) =>
@@ -1609,6 +1688,8 @@ function cookItems() {
 function renderCooking() {
   const dishes = (dyn().cooking && dyn().cooking.dishes) || [];
   const effects = cookEffects();
+  if (S.cook.fx && !effects.some((e) => e.key === S.cook.fx)) S.cook.fx = '';
+  if (!SORT_FN[S.cook.sort]) S.cook.sort = 'hearts';
   $('#cook-fx').innerHTML = `<button class="fxchip" data-cfx="" aria-pressed="${S.cook.fx === ''}"><span>All</span><span class="c">${dishes.length}</span></button>` +
     effects.map((e) => `<button class="fxchip" data-cfx="${esc(e.key)}" aria-pressed="${S.cook.fx === e.key}">${e.effect ? sigil(e.effect) : ''}<span>${esc(e.name)}</span><span class="c">${e.count}</span></button>`).join('');
   $('#cook-sort').innerHTML = COOK_SORTS.map(([k, l]) => `<button data-csort="${k}" aria-pressed="${S.cook.sort === k}">${l}</button>`).join('');

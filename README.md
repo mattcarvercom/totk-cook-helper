@@ -128,9 +128,10 @@ seconds (default 15).
 
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
-rather than the pause map's last viewed layer. Click a marker for its name,
-position and distance from Link, or use **Near Link** to see the closest
-collectibles first. Show all or hide all marker categories from the sidebar.
+rather than the pause map's last viewed layer. Layer and marker filters are in
+the left pane. Click a marker for its name, position and distance from Link,
+or use **Near Link** on the right to see the closest collectibles first. Show
+all or hide all marker categories from the left pane.
 Completion lists every tracked category and can show only missing entries.
 The armor page shows every set, the owned level, and the materials needed for
 the next upgrade. Upgrade materials and material details have a **Sources**
@@ -139,9 +140,10 @@ counts, and world spawns, then can pin those places on the map. Shops come from
 the actor packs' ShopParam data, drops from the enemy DropTable and horn mapping
 data, and spawns from the Banc map placements, all from your own game files.
 
-Companion shortcuts: `/` focuses the active filter, `1` to `7` switch sections,
-`r` refreshes, and Esc clears a filter or closes settings. The save slot is
-chosen in Settings; Auto follows the newest save.
+Each tab remembers its filters and view choices across restarts. Companion
+shortcuts: `/` focuses the active filter, `1` to `7` switch sections, `r`
+refreshes, and Esc clears a filter or closes settings. The save slot is chosen
+in Settings; Auto follows the newest save.
 
 ## Cook Helper controls
 

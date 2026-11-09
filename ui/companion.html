@@ -80,9 +80,17 @@
 
     <section class="page" id="page-map" data-page="map" hidden>
       <div class="map-layout">
+        <aside class="map-left">
+          <h3 class="label">Layers and markers</h3>
+          <div class="seg map-layers" id="map-layers"></div>
+          <div class="map-cat-actions">
+            <button data-mcats="all">Show all</button>
+            <button data-mcats="none">Hide all</button>
+          </div>
+          <div class="map-cats" id="map-cats"></div>
+        </aside>
         <div class="map-main">
           <div class="map-toolbar">
-            <div class="seg" id="map-layers"></div>
             <div class="seg" id="map-found"></div>
             <label class="filter map-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
@@ -108,12 +116,6 @@
         </div>
         <aside class="map-side">
           <div id="map-detail" class="map-detail"></div>
-          <h3 class="label">Layers and markers</h3>
-          <div class="map-cat-actions">
-            <button data-mcats="all">Show all</button>
-            <button data-mcats="none">Hide all</button>
-          </div>
-          <div class="map-cats" id="map-cats"></div>
           <h3 class="label">Near Link</h3>
           <div class="nearby" id="map-nearby"></div>
         </aside>
