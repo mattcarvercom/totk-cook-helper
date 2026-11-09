@@ -15,7 +15,8 @@ const S = {
   inv: { cat: 'weapons', filter: '', sel: null },
   armor: { slot: '', owned: false, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'all', search: '', sel: null,
-         fitted: false, layerSet: false, pending: null, raf: 0, drag: null },
+         fitted: false, layerSet: false, pending: null, raf: 0, drag: null, iconImages: {},
+         miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'missing', filter: '' },
   comp: { group: '', state: '', filter: '', sel: null },
   cook: { filter: '', fx: '', sort: 'hearts', sel: null },
@@ -208,7 +209,12 @@ async function start() {
   S.selectedSave = boot.selected_save || '';
   S.page = S.settings.tab || 'status';
   if (!NAV.some((x) => x[0] === S.page)) S.page = 'status';
-  for (const c of (cat().collectible_categories || [])) S.map.cats.add(c.key);
+  // Keep the first map readable; the sidebar can show every category.
+  const defaults = ['shrines', 'lightroots', 'wells', 'chasms', 'old_maps', 'sages_wills',
+                    'addison_signposts', 'schema_stones', 'yiga_schematics'];
+  for (const c of defaults) S.map.cats.add(c);
+  for (const c of (cat().collectible_categories || [])) if (!defaults.includes(c.key)) S.map.cats.delete(c.key);
+  loadMapIcons();
   renderNav();
   renderSaves();
   attachStatic();
@@ -242,6 +248,18 @@ async function poll(first) {
 function rebuildMaterialCounts() {
   S.matCounts = {};
   for (const it of invCat('materials').items) S.matCounts[it.actor] = it.count;
+}
+
+function loadMapIcons() {
+  S.map.iconImages = {};
+  const icons = cat().map_icons || {};
+  Object.keys(icons).forEach((key) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => requestDraw();
+    img.src = 'companion_data/' + icons[key];
+    S.map.iconImages[key] = img;
+  });
 }
 
 function showPage(key, first) {
@@ -324,7 +342,7 @@ function renderStatus() {
         <div class="who">
           <div class="mark">${icon('check', 'g')}</div>
           <div><h1 class="h-name">${fmtHearts(st.hearts.current)} <small style="font-size:14px;color:var(--dim)">/ ${fmtHearts(st.hearts.max)} hearts</small></h1>
-            <div class="h-sub">${esc(st.map_layer || 'Surface')} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div></div>
+            <div class="h-sub">${esc(st.layer || st.map_layer || 'Surface')} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div></div>
         </div>
         <div class="hearts">${heartsWithMax(st.hearts.current, st.hearts.max, false)}</div>
         <div class="h-line">${fmtHearts(st.hearts.current)} of ${fmtHearts(st.hearts.max)} hearts filled</div>
@@ -342,7 +360,7 @@ function renderStatus() {
       </div>
       <div class="grid2" style="margin-top:12px;font-size:13.5px">
         <dt>Position</dt><dd>${Math.round(pos.x || 0)}, ${Math.round(pos.y || 0)}, ${Math.round(pos.z || 0)}</dd>
-        <dt>Layer</dt><dd>${esc(st.map_layer || 'Surface')}</dd>
+        <dt>Layer</dt><dd>${esc(st.layer || st.map_layer || 'Surface')}</dd>
       </div>
     </section>
 
@@ -598,7 +616,8 @@ function renderArmorDetail(p) {
 /* ------------------------------------------------------------------ map */
 
 function playerLayer() {
-  const l = dyn().status && dyn().status.map_layer;
+  const st = dyn().status || {};
+  const l = st.layer || st.map_layer;
   return l === 'Sky' ? 'sky' : l === 'UnderGround' ? 'depths' : 'surface';
 }
 function projection() {
@@ -668,6 +687,11 @@ function loadMapImage() {
   const src = 'companion_data/' + layer.image;
   if (img.dataset.layer === S.map.layer && img.src) { drawMap(); return; }
   img.dataset.layer = S.map.layer;
+  const mini = $('#minimap-img');
+  if (mini) {
+    mini.onload = () => requestMinimapDraw();
+    mini.src = src;
+  }
   $('#map-loading').hidden = false;
   img.onload = () => {
     $('#map-loading').hidden = true;
@@ -730,7 +754,8 @@ function renderMapDetail() {
   const p = playerPos();
   const d = p ? dist3(p, item) : null;
   const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
-  el.innerHTML = `<h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div>` +
+  const iconFile = (cat().map_icons || {})[item.cat];
+  el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
     `<div class="k">Status</div><div class="v">${state}</div>` +
     `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
     (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}</div>` : '') +
@@ -775,6 +800,7 @@ function applyMap() {
   const img = $('#map-img');
   if (img) img.style.transform = `translate(${S.map.tx}px, ${S.map.ty}px) scale(${S.map.zoom})`;
   requestDraw();
+  requestMinimapDraw();
 }
 function zoomAt(factor, cx, cy) {
   const vp = $('#map-viewport');
@@ -863,14 +889,123 @@ function drawMap() {
     const sy = S.map.ty + pr.y(pos.z) * S.map.zoom;
     if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) drawPlayer(ctx, sx, sy);
   }
+  requestMinimapDraw();
+}
+
+function requestMinimapDraw() {
+  if (S.map.miniRAF) return;
+  S.map.miniRAF = requestAnimationFrame(() => { S.map.miniRAF = 0; drawMinimap(); });
+}
+
+function drawMinimap() {
+  const m = cat().map;
+  if (!m) return;
+  const box = $('#minimap');
+  const canvas = $('#minimap-canvas');
+  if (!box || !canvas) return;
+  const w = box.clientWidth, h = box.clientHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const img = $('#minimap-img');
+  if (img && img.complete && img.naturalWidth) {
+    ctx.drawImage(img, 0, 0, w, h);
+  } else {
+    ctx.fillStyle = '#06090c';
+    ctx.fillRect(0, 0, w, h);
+  }
+  const vp = $('#map-viewport');
+  const vw = vp.clientWidth, vh = vp.clientHeight;
+  const left = clamp((0 - S.map.tx) / S.map.zoom, 0, m.width);
+  const top = clamp((0 - S.map.ty) / S.map.zoom, 0, m.height);
+  const right = clamp((vw - S.map.tx) / S.map.zoom, 0, m.width);
+  const bottom = clamp((vh - S.map.ty) / S.map.zoom, 0, m.height);
+  const rx = left / m.width * w, ry = top / m.height * h;
+  const rw = Math.max(2, (right - left) / m.width * w);
+  const rh = Math.max(2, (bottom - top) / m.height * h);
+  // Darken everything outside the current view, then outline it.
+  ctx.fillStyle = 'rgba(4,7,10,.42)';
+  ctx.fillRect(0, 0, w, ry);
+  ctx.fillRect(0, ry + rh, w, h - (ry + rh));
+  ctx.fillRect(0, ry, rx, rh);
+  ctx.fillRect(rx + rw, ry, w - (rx + rw), rh);
+  ctx.fillStyle = 'rgba(255,240,194,.10)';
+  ctx.fillRect(rx, ry, rw, rh);
+  ctx.strokeStyle = '#fff0c2';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rx, ry, rw, rh);
+  const pos = playerPos();
+  if (pos && S.map.layer === playerLayer()) {
+    const pr = projection();
+    const px = pr.x(pos.x) / m.width * w;
+    const py = pr.y(pos.z) / m.height * h;
+    ctx.fillStyle = '#fff0c2';
+    ctx.strokeStyle = 'rgba(5,8,10,.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  if (S.map.sel) {
+    const item = cat().collectibles.find((x) => x.id === S.map.sel);
+    if (item) {
+      const pr = projection();
+      const px = pr.x(item.x) / m.width * w;
+      const py = pr.y(item.z) / m.height * h;
+      ctx.fillStyle = '#7fd0ff';
+      ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function minimapGoto(e) {
+  const m = cat().map;
+  const box = $('#minimap');
+  const vp = $('#map-viewport');
+  if (!m || !box || !vp) return;
+  const rect = box.getBoundingClientRect();
+  const mx = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+  const my = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+  S.map.tx = vp.clientWidth / 2 - mx * m.width * S.map.zoom;
+  S.map.ty = vp.clientHeight / 2 - my * m.height * S.map.zoom;
+  S.map.fitted = true;
+  applyMap();
+}
+function markerRing(ctx, x, y, radius) {
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#fff0c2';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
 }
 function drawMarker(ctx, x, y, r, xitem, selected) {
   const it = xitem.item;
   const meta = catMeta(it.cat);
   const color = meta.color;
   const st = xitem.state;
+  const icon = S.map.iconImages && S.map.iconImages[it.cat];
+  const alpha = st >= 2 ? 0.30 : st === 1 ? 0.55 : 0.98;
+  if (icon && icon.complete && icon.naturalWidth) {
+    const max = clamp(12 + Math.log2(S.map.zoom + 3) * 2.8, 14, 30);
+    const scale = max / Math.max(icon.naturalWidth, icon.naturalHeight);
+    const dw = icon.naturalWidth * scale, dh = icon.naturalHeight * scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = 'rgba(0,0,0,.9)';
+    ctx.shadowBlur = 4;
+    ctx.drawImage(icon, x - dw / 2, y - dh / 2, dw, dh);
+    ctx.restore();
+    if (selected) markerRing(ctx, x, y, Math.max(dw, dh) / 2 + 5);
+    return;
+  }
+  // Fallback for a category whose game texture is missing.
   ctx.save();
-  ctx.globalAlpha = st >= 2 ? 0.30 : st === 1 ? 0.55 : 0.96;
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   ctx.strokeStyle = 'rgba(5,8,10,.9)';
   ctx.lineWidth = Math.max(1, r * 0.28);
@@ -905,13 +1040,8 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   }
   ctx.fill();
   ctx.stroke();
-  if (selected) {
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = '#fff0c2';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
-  }
   ctx.restore();
+  if (selected) markerRing(ctx, x, y, r + 5);
 }
 function drawPlayer(ctx, x, y) {
   ctx.save();
@@ -1236,6 +1366,39 @@ function attachStatic() {
   $('#map-zoomout').addEventListener('click', () => zoomAt(1 / 1.45));
   $('#map-fit').addEventListener('click', fitMap);
   $('#map-me').addEventListener('click', centerOnPlayer);
+
+  const mini = $('#minimap');
+  if (mini) {
+    mini.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      S.map.miniDrag = true;
+      try { mini.setPointerCapture(e.pointerId); } catch (err) {}
+      minimapGoto(e);
+    });
+    mini.addEventListener('pointermove', (e) => {
+      if (!S.map.miniDrag) return;
+      e.preventDefault(); e.stopPropagation();
+      minimapGoto(e);
+    });
+    const miniEnd = (e) => { S.map.miniDrag = false; e.stopPropagation(); };
+    mini.addEventListener('pointerup', miniEnd);
+    mini.addEventListener('pointercancel', miniEnd);
+    if (!('PointerEvent' in window)) {
+      mini.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        S.map.miniDrag = true;
+        minimapGoto(e);
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!S.map.miniDrag) return;
+        e.preventDefault(); e.stopPropagation();
+        minimapGoto(e);
+      });
+      window.addEventListener('mouseup', () => { S.map.miniDrag = false; });
+    }
+  }
   window.addEventListener('resize', () => {
     S.map.fitted = false;
     if (S.page === 'map') { fitMap(); S.map.fitted = true; }
@@ -1266,6 +1429,14 @@ document.addEventListener('click', (e) => {
   if (t.dataset.cfx !== undefined) { S.cook.fx = t.dataset.cfx; renderCooking(); return; }
   if (t.dataset.csort) { S.cook.sort = t.dataset.csort; renderCooking(); return; }
   if (t.dataset.cdish) { S.cook.sel = t.dataset.cdish; showPage('cook'); renderCooking(); return; }
+  if (t.dataset.mcats) {
+    if (t.dataset.mcats === 'all') {
+      for (const c of (cat().collectible_categories || [])) S.map.cats.add(c.key);
+    } else {
+      S.map.cats.clear();
+    }
+    renderMapCats(); renderNearby(); drawMap(); return;
+  }
   if (t.dataset.mcat) {
     if (S.map.cats.has(t.dataset.mcat)) S.map.cats.delete(t.dataset.mcat); else S.map.cats.add(t.dataset.mcat);
     renderMapCats(); renderNearby(); drawMap(); return;

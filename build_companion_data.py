@@ -16,10 +16,11 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 import time
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 
 import build_data
 import build_icons
@@ -31,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, 'ui', 'companion_data')
 ICONS = os.path.join(OUT, 'icons')
 MAP = os.path.join(OUT, 'map')
+MAPICONS = os.path.join(OUT, 'mapicons')
 DATA = os.path.join(HERE, 'data')
 
 # Map tiles use ASTC 12x12 in addition to the formats the icon exporter knows.
@@ -65,6 +67,31 @@ CATEGORIES = {
     'addison_signposts': {'label': 'Addison signs', 'color': '#e8c56a', 'icon': 'sign', 'kind': 'treasure'},
     'schema_stones': {'label': 'Schema stones', 'color': '#bfa8e0', 'icon': 'schema', 'kind': 'treasure'},
     'yiga_schematics': {'label': 'Yiga schematics', 'color': '#d98f8f', 'icon': 'yiga', 'kind': 'treasure'},
+}
+
+# Map marker textures from UI/LayoutArchive/Common.blarc, timg/__Combined.bntx.
+# These are the game's own map icon shapes; each is tinted with its category color.
+MAP_ICON_SOURCES = {
+    'shrines': 'MapIconDungeon_L_Icon',
+    'lightroots': 'Nt_MapChallengeIcon_00',
+    'hidden_koroks': 'MapIconKorok_x2',
+    'carry_koroks': 'MapIconKorok_x2',
+    'bubbuls': 'MapIconCaveM_72x72',
+    'locations': 'MapIconFrontierPoint_64x64',
+    'caves': 'MapIconCaveM_72x72',
+    'wells': 'MapIconCaveS_72x72',
+    'chasms': 'MapIconCaveS_72x72',
+    'hinoxes': 'MapIconSkull_72x72',
+    'taluses': 'MapIconSkull_72x72',
+    'moldugas': 'MapIconSkull_72x72',
+    'flux_constructs': 'MapIconSkull_72x72',
+    'froxes': 'MapIconSkull_72x72',
+    'gleeoks': 'MapIconSkull_72x72',
+    'old_maps': 'MapIconTreasureBox_72x72',
+    'sages_wills': 'SageWillPouchIcon_00',
+    'addison_signposts': 'MapIconBuildingNewsPaper_58x58',
+    'schema_stones': 'MapIconRelief_00',
+    'yiga_schematics': 'MapIconShopEvil_58x58',
 }
 
 LAYER_LABEL = {'surface': 'Surface', 'sky': 'Sky', 'depths': 'Depths'}
@@ -104,6 +131,33 @@ def pick_tile_suffix(entries):
             if suffix in entries:
                 return suffix
     return None
+
+
+def tint_icon(img, color):
+    """Recolor a game map icon while keeping its black symbol readable.
+
+    Two kinds of textures are used by the map UI:
+    - a white rounded tile with a black symbol in the alpha-cut tile shape
+    - a red/white shape on an opaque black background
+    """
+    rgba = img.convert('RGBA')
+    alpha = rgba.getchannel('A')
+    amin, amax = alpha.getextrema()
+    c = color.lstrip('#')
+    rgb = (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+    if amin < 250 and amax > 0:
+        # Tile icon: keep the black symbol, color the white tile.
+        gray = ImageOps.grayscale(rgba.convert('RGB'))
+        color_layer = Image.new('RGB', img.size, rgb)
+        shaded = ImageChops.multiply(color_layer, Image.merge('RGB', (gray, gray, gray)))
+        out = Image.merge('RGBA', shaded.split() + (alpha,))
+        return out
+    # Silhouette icon: the shape is the bright part of an opaque black image.
+    r, g, b = rgba.convert('RGB').split()
+    mask = ImageChops.lighter(ImageChops.lighter(r, g), b)
+    out = Image.new('RGBA', img.size, rgb + (0,))
+    out.putalpha(mask)
+    return out
 
 
 class Builder:
@@ -486,6 +540,52 @@ class Builder:
         self.catalog['map'] = meta
         json.dump(meta, open(os.path.join(MAP, 'map.json'), 'w', encoding='utf-8'), indent=1)
 
+    # --- map markers ----------------------------------------------------------
+
+    def extract_map_icons(self):
+        """Export the game's own map-marker textures from the Common UI archive."""
+        path = self.rf.find('UI/LayoutArchive/Common.', '.blarc.zs')
+        if not path:
+            log('map icons: Common UI archive not found')
+            return
+        try:
+            archive = sarc.read(self.rf.read(path))
+            bntx = archive['timg/__Combined.bntx']
+        except Exception as e:
+            log('map icons: cannot read texture archive:', e)
+            return
+        textures = {}
+        for match in re.finditer(b'BRTI', bntx):
+            off = match.start()
+            ptr = struct.unpack_from('<Q', bntx, off + 0x60)[0]
+            raw = bntx[ptr:ptr + 300]
+            if len(raw) < 2:
+                continue
+            n = struct.unpack_from('<H', raw, 0)[0]
+            if 0 < n < 250:
+                name = raw[2:2 + n].split(b'\0')[0].decode('latin1', 'ignore')
+            else:
+                name = raw.split(b'\0')[0].decode('latin1', 'ignore')
+            textures[name.split('^')[0]] = off
+        os.makedirs(MAPICONS, exist_ok=True)
+        out = {}
+        for cat, source in MAP_ICON_SOURCES.items():
+            off = textures.get(source)
+            if off is None:
+                log('map icons: missing texture', source)
+                continue
+            try:
+                img = build_icons.decode_bntx(bntx, off)
+            except Exception as e:
+                log('map icons: cannot decode %s: %s' % (source, e))
+                continue
+            img = tint_icon(img, CATEGORIES[cat]['color'])
+            fname = cat + '.webp'
+            img.save(os.path.join(MAPICONS, fname), 'WEBP', quality=90, method=6)
+            out[cat] = 'mapicons/' + fname
+        self.catalog['map_icons'] = out
+        log('map icons: %d exported' % len(out))
+
     # --- run ------------------------------------------------------------------
 
     def run(self):
@@ -504,6 +604,7 @@ class Builder:
         self.build_collectibles()
         if not self.skip_map:
             self.build_map()
+        self.extract_map_icons()
         # Copy the cooking data so the UI has a single self-contained folder.
         try:
             shutil.copyfile(os.path.join(HERE, 'cookdata.json'), os.path.join(OUT, 'cookdata.json'))
@@ -519,6 +620,7 @@ class Builder:
                 'compendium': len(self.catalog.get('compendium', [])),
                 'collectibles': len(self.catalog.get('collectibles', [])),
                 'icons': len([v for v in self.built_icons.values() if v]),
+                'map_icons': len(self.catalog.get('map_icons', {})),
             },
         }
         json.dump(self.catalog, open(os.path.join(OUT, 'catalog.json'), 'w', encoding='utf-8'),

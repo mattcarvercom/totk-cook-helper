@@ -100,11 +100,19 @@
             <canvas id="map-canvas"></canvas>
             <div class="map-loading" id="map-loading">Loading map…</div>
             <div class="map-compass" aria-hidden="true"><span>N</span></div>
+            <div class="minimap" id="minimap" title="Overview. Click or drag to move the map.">
+              <img id="minimap-img" alt="" draggable="false">
+              <canvas id="minimap-canvas"></canvas>
+            </div>
           </div>
         </div>
         <aside class="map-side">
           <div id="map-detail" class="map-detail"></div>
           <h3 class="label">Layers and markers</h3>
+          <div class="map-cat-actions">
+            <button data-mcats="all">Show all</button>
+            <button data-mcats="none">Hide all</button>
+          </div>
           <div class="map-cats" id="map-cats"></div>
           <h3 class="label">Near Link</h3>
           <div class="nearby" id="map-nearby"></div>

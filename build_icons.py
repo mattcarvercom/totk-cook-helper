@@ -54,8 +54,8 @@ def deswizzle(data, w, h, bpp, block_height):
     return bytes(out)
 
 
-def decode_bntx(raw):
-    i = raw.find(b'BRTI')
+def decode_bntx(raw, start=0):
+    i = raw.find(b'BRTI', start)
     if i < 0:
         raise ValueError('no BRTI')
     fmt, = struct.unpack_from('<I', raw, i + 0x1C)

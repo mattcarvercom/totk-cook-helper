@@ -198,7 +198,18 @@ class Save:
             })
         abilities = [a for a in self.strings('Pouch.SpecialPower.Content.Name') if a]
         abilities = [{'actor': a, 'name': self.actors.get(a, {}).get('name') or a} for a in abilities]
-        layer = self.enum_name(self.u32('MapData.CurrentLayer'))
+        # MapData.CurrentLayer is the pause-map's last viewed layer, not Link's
+        # physical layer. Use SavePos height so the marker follows Link.
+        raw_layer = self.enum_name(self.u32('MapData.CurrentLayer')) or 'Ground'
+        layer = raw_layer
+        if pos:
+            y = pos[1]
+            if y < -100:
+                layer = 'UnderGround'
+            elif y > 1000:
+                layer = 'Sky'
+            else:
+                layer = 'Ground'
         playtime = self.u32('Playtime')
         return {
             'hearts': {'current': life / 4.0, 'max': max_life / 4.0},
@@ -206,7 +217,8 @@ class Save:
             'energy': {'max': (self.f32('PlayerStatus.MaxEnergy') or 0) / 1000.0},
             'rupees': self.i32('PlayerStatus.CurrentRupee') or 0,
             'position': {'x': pos[0], 'y': pos[1], 'z': pos[2]} if pos else None,
-            'map_layer': layer or 'Ground',
+            'layer': layer,
+            'map_layer': raw_layer,
             'playtime': playtime,
             'sages': sages,
             'abilities': abilities,
