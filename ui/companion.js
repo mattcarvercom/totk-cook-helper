@@ -264,7 +264,8 @@ function uiState() {
 let uiSaveTimer = 0;
 function saveUiState() {
   if (uiSaveTimer) { clearTimeout(uiSaveTimer); uiSaveTimer = 0; }
-  call('set_setting', 'ui_state', uiState());
+  const p = call('set_setting', 'ui_state', uiState());
+  if (p && p.catch) p.catch(() => {});
 }
 function saveUiStateSoon() {
   if (uiSaveTimer) clearTimeout(uiSaveTimer);
