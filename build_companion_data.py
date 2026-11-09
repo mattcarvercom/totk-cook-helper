@@ -378,7 +378,8 @@ class Builder:
 
     # --- icons ----------------------------------------------------------------
 
-    def _save_icon(self, key, source, size=ICON_SIZE, quality=88):
+    def _save_icon(self, key, source, size=ICON_SIZE, quality=88, fit=False,
+                   centering=(0.5, 0.5), center_on_alpha=False):
         if key in self.built_icons:
             return self.built_icons[key]
         if source not in self.rf.files:
@@ -391,7 +392,16 @@ class Builder:
             self.built_icons[key] = None
             return None
         if img.width != size or img.height != size:
-            img = img.resize((size, size), Image.LANCZOS)
+            if fit:
+                if center_on_alpha:
+                    box = img.getchannel('A').getbbox()
+                    if box:
+                        centering = (((box[0] + box[2]) / 2) / img.width,
+                                     ((box[1] + box[3]) / 2) / img.height)
+                img = ImageOps.fit(img, (size, size), method=Image.LANCZOS,
+                                   centering=centering)
+            else:
+                img = img.resize((size, size), Image.LANCZOS)
         safe = re.sub(r'[^A-Za-z0-9_.-]+', '_', key)
         fname = safe + '.webp'
         os.makedirs(ICONS, exist_ok=True)
@@ -420,7 +430,8 @@ class Builder:
         out = {}
         for key, name in SAGE_ICON_SOURCES.items():
             src = 'UI/Tex/CharaDirectory/%s.bntx.zs' % name
-            icon = self._save_icon('sage_' + key, src, size=192, quality=90)
+            icon = self._save_icon('sage_' + key, src, size=192, quality=90,
+                                   fit=True, center_on_alpha=True)
             if icon:
                 out[key] = icon
         self.catalog['sage_icons'] = out

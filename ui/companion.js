@@ -2376,7 +2376,8 @@ document.addEventListener('click', (e) => {
   if (t.dataset.invkey !== undefined) {
     S.inv.sel = t.dataset.invkey;
     $$('#inv-grid .cell').forEach((c) => c.setAttribute('aria-selected', String(c.dataset.invkey === S.inv.sel)));
-    const it = invCat(S.inv.cat).items.find((x) => x.actor + ':' + (x.index === undefined ? 0 : x.index) === S.inv.sel);
+    const it = (dyn().inventory || []).flatMap((c) => c.items)
+      .find((x) => x.actor + ':' + (x.index === undefined ? 0 : x.index) === S.inv.sel);
     if (it) renderInvDetail(it);
     return;
   }
