@@ -132,9 +132,11 @@ icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
 map. **Reveal full map** is off by default, so the map starts with the
-areas you have revealed in the game. Surface and Sky use the Skyview Tower
-region boundaries, and the Depths reveal the Field Map Area around each
-activated Lightroot, so the shapes are regions rather than circles. Travel
+areas you have revealed in the game. The Sky layer blends its cloud sheet with
+the Surface map so roads and terrain remain visible underneath. Surface and Sky
+use the Skyview Tower region boundaries, and the Depths reveal the Field Map
+Area around each activated Lightroot, so the shapes are regions rather than
+circles. Travel
 Medallions have their own toggle in the left pane, appear only on their layer,
 and use the game's medallion art without a background plate. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
@@ -162,19 +164,21 @@ weapon modifier; Defense is the sum of the three worn pieces. Active Attack Up
 also shows the adjusted value. Journey shows total playtime, deaths, distance,
 and Hero's Path points from the save. Key item chips show Korok Seeds, Bubbul
 Gems, and Light of Blessing. A pouch summary shows each bag's used and maximum
-slots plus the next Hestu price for weapons, bows, and shields. The inventory
+slots plus the next Hestu price for weapons, bows, and shields. Equipment,
+material, attack, defense, pouch, and completion cards jump to the matching
+inventory, armor, or progress view. The inventory
 opens on All, and category chips show their slot cap, such as Weapons 12/12 or
 Materials 137/255. Choosing an equipment category also shows the next Korok
 Seed cost, and the armor page shows owned pieces against its 150 slots. Armor
 opens with Owned only; armor with elemental or gloom resistance shows the
 matching icon in its top-left corner. Weapons and shields show a fusion badge
 and the fused item in their details, including object fusions such as Rock.
-Cooking starts with dishes
-that the current pouch can make; **All recipes** adds the full recipe table
-with required ingredient slots and marks entries the pouch cannot cook yet.
-Stamina recovery dishes show the recovered portion of a stamina wheel. New
-installs start with spoiler-free filters: Found map markers, photographed
-compendium entries, found progress entries, and the map limited to revealed
+Cooking starts with dishes that the current pouch can make; **All recipes**
+adds the full recipe table with required ingredient slots and marks entries the
+pouch cannot cook yet. The dish detail shows the recovered portion of a stamina
+wheel for Stamina Recovery recipes. New installs start with spoiler-free
+filters: Found map markers, photographed compendium entries, found progress
+entries, and the map limited to revealed
 areas.
 
 Each tab remembers its filters and view choices across restarts. **Reset

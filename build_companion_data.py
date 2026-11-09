@@ -22,7 +22,7 @@ import struct
 import sys
 import time
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 import build_data
 import build_icons
@@ -1262,6 +1262,7 @@ class Builder:
         sky = images['S']
         depth = images['U'] if cells['U'] else ImageOps.colorize(ImageOps.grayscale(surface), black=(3, 6, 12), white=(32, 58, 68))
         layers = {}
+        surface_display = None
         for key, canvas, quality in (('surface', surface, 88), ('sky', sky, 88), ('depths', depth, 86)):
             canvas.save(os.path.join(MAP, key + '.webp'), 'WEBP', quality=quality, method=6)
             # The UI never needs the full LOD1 image at once. A 3600px display
@@ -1269,6 +1270,13 @@ class Builder:
             # world size in the catalog.
             display = canvas.copy()
             display.thumbnail((3600, 3000), Image.LANCZOS)
+            if key == 'surface':
+                surface_display = display.copy()
+            elif key == 'sky' and surface_display is not None:
+                # The sky tiles carry an opaque cloud sheet. Blend the surface
+                # underneath and lighten it so roads and terrain stay visible.
+                display = Image.blend(surface_display, display, 0.62)
+                display = ImageEnhance.Brightness(display).enhance(1.10)
             display.save(os.path.join(MAP, key + '-display.webp'), 'WEBP', quality=86, method=6)
             layers[key] = {'label': key.title(), 'image': 'map/%s-display.webp' % key}
         meta = {

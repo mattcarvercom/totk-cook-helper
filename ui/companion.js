@@ -600,7 +600,9 @@ function renderPage(key, first) {
 
 function equipCard(label, item, iconName, meta) {
   if (!item) {
-    return `<button class="equip-card" data-invcat="${label === 'Head' || label === 'Body' || label === 'Legs' ? 'armor' : label.toLowerCase() + 's'}">` +
+    const armorSlot = label === 'Head' || label === 'Body' || label === 'Legs';
+    const action = armorSlot ? 'data-page-go="armor"' : `data-invcat="${label.toLowerCase()}s"`;
+    return `<button class="equip-card" ${action}>` +
       `<span class="ico">${icon(iconName, 'g')}</span><span><span class="en">${esc(label)}</span><span class="ev dimmed">Empty</span></span></button>`;
   }
   const fused = item.fused ? ` · Fused: ${item.fused_name || item.fused}` : '';
@@ -742,9 +744,10 @@ function renderStatus() {
     const c = invCat(key);
     if (!c.cap) return '';
     const sub = c.next_cost ? `Next slot: ${c.next_cost} seeds · max ${c.max}` : `${POUCH_NOUN[key] || 'item'} slots`;
-    return `<div class="stat"><span class="k">${esc(label)}</span>` +
+    const action = key === 'armor' ? 'data-page-go="armor"' : `data-invcat="${key}"`;
+    return `<button class="stat" ${action}><span class="k">${esc(label)}</span>` +
       `<span class="v">${c.used}<small> / ${c.cap}</small></span>` +
-      `<span class="vv">${esc(sub)}</span></div>`;
+      `<span class="vv">${esc(sub)}</span></button>`;
   };
   const keyItem = (actor, label) => {
     const it = invCat('keyitems').items.find((x) => x.actor === actor);
@@ -785,24 +788,24 @@ function renderStatus() {
           <div class="gauge">${staminaGauge(staminaMax)}</div>
           <span class="vv">${staminaMax.toFixed(1)} wheels</span>
         </div>
-        <div class="vital">
+        <button class="vital" data-invcat="zonai">
           <span class="vk">Energy</span>
           <div class="gauge">${energyGauge(energyMax)}</div>
           <span class="vv">${energyMax.toFixed(1)} cells</span>
-        </div>
-        <div class="vital">
+        </button>
+        <button class="vital" data-invcat="materials">
           <span class="vk">Materials</span>
           <span class="vbig">${matCount}</span>
           <span class="vv">in pouch</span>
-        </div>
+        </button>
       </div>
 
       <div class="statrow combat">
-        <div class="stat"><span class="k">Attack</span><span class="v">${attack}</span>
-          <span class="vv">${weapon ? `Weapon ${weaponAttack}${fuseAttack ? ` + fuse ${fuseAttack}` : ''}${attackMod ? ` + mod ${attackMod}` : ''}` : 'No weapon equipped'}</span></div>
-        <div class="stat"><span class="k">Defense</span><span class="v">${defense}</span>
-          <span class="vv">${wornArmor.length ? `${headDef} + ${bodyDef} + ${legDef}` : 'No armor equipped'}</span></div>
-        ${attackLevel ? `<div class="stat"><span class="k">With Attack Up</span><span class="v">${Math.round(attack * attackMult)}</span><span class="vv">Lv. ${attackLevel}${setBonusFx.some((x) => x.type === 'AttackUp') ? ' · set bonus' : ''}</span></div>` : ''}
+        <button class="stat" data-invcat="weapons"><span class="k">Attack</span><span class="v">${attack}</span>
+          <span class="vv">${weapon ? `Weapon ${weaponAttack}${fuseAttack ? ` + fuse ${fuseAttack}` : ''}${attackMod ? ` + mod ${attackMod}` : ''}` : 'No weapon equipped'}</span></button>
+        <button class="stat" data-page-go="armor"><span class="k">Defense</span><span class="v">${defense}</span>
+          <span class="vv">${wornArmor.length ? `${headDef} + ${bodyDef} + ${legDef}` : 'No armor equipped'}</span></button>
+        ${attackLevel ? `<button class="stat" data-invcat="weapons"><span class="k">With Attack Up</span><span class="v">${Math.round(attack * attackMult)}</span><span class="vv">Lv. ${attackLevel}${setBonusFx.some((x) => x.type === 'AttackUp') ? ' · set bonus' : ''}</span></button>` : ''}
       </div>
 
       <div class="status-meta">
@@ -867,7 +870,7 @@ function renderStatus() {
         ${quick('Koroks', 'hidden_koroks')}
         ${quick('Caves', 'caves')}
         ${quick('Bubbuls', 'bubbuls')}
-        <button class="quick" data-page-go="progress"><span class="qk">Overall</span><span class="qv">${pct(comp.totals.complete, comp.totals.total)}<small>%</small></span><span class="qs">${comp.totals.total - comp.totals.complete - comp.totals.started} missing</span><span class="bar"><i style="width:${pct(comp.totals.complete, comp.totals.total)}%"></i></span></button>
+        <button class="quick" data-pcat="overview"><span class="qk">Overall</span><span class="qv">${pct(comp.totals.complete, comp.totals.total)}<small>%</small></span><span class="qs">${comp.totals.total - comp.totals.complete - comp.totals.started} missing</span><span class="bar"><i style="width:${pct(comp.totals.complete, comp.totals.total)}%"></i></span></button>
       </div>
     </section>
   </div>`;
@@ -1222,8 +1225,8 @@ function renderArmorDetail(p) {
   const multiPiece = setPieces.length > 1;
   const bonusReady = bonus.length > 0 && allOwned && minRank >= SET_BONUS_LEVEL;
   const pieceChips = setPieces.map((x) =>
-    `<span class="setpiece-chip"><span>${slotLabel(x.slot)}</span>` +
-    `<b class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</b></span>`
+    `<button class="setpiece-chip" data-armor="${esc(x.base)}"><span>${slotLabel(x.slot)}</span>` +
+    `<b class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</b></button>`
   ).join('');
   const bonusBlock = bonus.length
     ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Needs all ${setPieces.length} at Lv ${SET_BONUS_LEVEL}+`}</span>` +
@@ -2449,7 +2452,6 @@ function renderCompendium() {
   grid.innerHTML = list.map((x) => {
     const cls = x.st.state === 'Unopened' ? ' comp-cell unopened' : ' comp-cell';
     return `<button class="cell${cls}" role="option" aria-selected="${x.c.actor === S.comp.sel}" data-cactor="${esc(x.c.actor)}">` +
-      `${x.st.new ? '<span class="eq"></span>' : ''}` +
       `${art({ icon: x.c.icon, name: x.c.name }, 'g')}<span class="nm">${esc(x.c.name)}</span></button>`;
   }).join('');
   const chosen = list.find((x) => x.c.actor === S.comp.sel) || list[0];
@@ -2540,8 +2542,7 @@ function renderCooking() {
   if (!list.some((d) => d.id === S.cook.sel)) S.cook.sel = list[0].id;
   grid.innerHTML = list.map((d) => {
     const badge = d.extra ? `<span class="badge">${heart(4, true)}+${fmtHearts(d.extra)}</span>` : d.hearts > 0 ? `<span class="badge">${heart(4)}${fmtHearts(d.hearts)}</span>` : '';
-    const stamina = d.effect === 'StaminaRecover' ? `<span class="stamcard">${staminaWheel(clamp((d.level || 0) / 15, 0, 1))}</span>` : '';
-    return `<button class="cell${d.all && !d.cookable ? ' dim' : ''}" role="option" aria-selected="${d.id === S.cook.sel}" data-cdish="${esc(d.id)}">${sigil(d.effect)}${badge}${stamina}${art(d)}<span class="nm">${esc(d.name)}</span></button>`;
+    return `<button class="cell${d.all && !d.cookable ? ' dim' : ''}" role="option" aria-selected="${d.id === S.cook.sel}" data-cdish="${esc(d.id)}">${sigil(d.effect)}${badge}${art(d)}<span class="nm">${esc(d.name)}</span></button>`;
   }).join('');
   renderCookDetail(list.find((d) => d.id === S.cook.sel) || list[0]);
 }
@@ -2779,7 +2780,12 @@ document.addEventListener('click', (e) => {
   if (!t) return;
   if (t.dataset.page) { showPage(t.dataset.page); return; }
   if (t.dataset.pageGo) { showPage(t.dataset.pageGo); return; }
-  if (t.dataset.invcat !== undefined) { S.inv.cat = t.dataset.invcat; S.inv.sel = null; renderInventory(); return; }
+  if (t.dataset.invcat !== undefined) {
+    S.inv.cat = t.dataset.invcat;
+    S.inv.sel = null;
+    if (S.page !== 'inventory') showPage('inventory'); else renderInventory();
+    return;
+  }
   if (t.dataset.invkey !== undefined) {
     S.inv.sel = t.dataset.invkey;
     $$('#inv-grid .cell').forEach((c) => c.setAttribute('aria-selected', String(c.dataset.invkey === S.inv.sel)));
@@ -2796,7 +2802,11 @@ document.addEventListener('click', (e) => {
   if (t.dataset.srcgroup) { showSourceGroup(S.sourceActor, t.dataset.srcgroup, t.dataset.srclabel || ''); return; }
   if (t.dataset.srcshow) { showMaterialSources(S.sourceActor, t.dataset.srcshow); return; }
   if (t.dataset.srcclear !== undefined) { clearSources(); return; }
-  if (t.dataset.pcat) { S.progress.cat = t.dataset.pcat; renderProgress(); return; }
+  if (t.dataset.pcat) {
+    S.progress.cat = t.dataset.pcat;
+    if (S.page !== 'progress') showPage('progress'); else renderProgress();
+    return;
+  }
   if (t.dataset.pmode) { S.progress.mode = t.dataset.pmode; renderProgress(); return; }
   if (t.dataset.cgroup !== undefined) { S.comp.group = t.dataset.cgroup; renderCompendium(); return; }
   if (t.dataset.cstate !== undefined) { S.comp.state = t.dataset.cstate; renderCompendium(); return; }
@@ -2863,6 +2873,14 @@ function openInventoryActor(actor) {
   for (const c of (dyn().inventory || [])) {
     const it = c.items.find((x) => x.actor === actor);
     if (it) {
+      if (c.key === 'armor') {
+        S.armor.sel = it.base || it.actor;
+        S.armor.slot = '';
+        S.armor.set = '';
+        S.armor.owned = true;
+        showPage('armor');
+        return;
+      }
       S.inv.cat = c.key;
       S.inv.sel = it.actor + ':' + (it.index === undefined ? 0 : it.index);
       showPage('inventory');

@@ -228,7 +228,8 @@ def build_cooking(inv, cook, catalog):
             'id': r['dish'], 'name': cook.display_name(r), 'hearts': r['hearts'],
             'extra': r['extra_hearts'], 'effect': eff,
             'effect_name': cc.EFFECT_NAMES.get(eff or 'None', ''),
-            'seconds': r['seconds'], 'mixed': bool(r['mixed_effects'] and not r['effect']),
+            'level': r['level'], 'seconds': r['seconds'],
+            'mixed': bool(r['mixed_effects'] and not r['effect']),
             'glyph': g, 'icon': icon, 'pot': pot, 'size': len(r['pot']),
         })
     dishes.sort(key=lambda x: (-(100 + x['extra'] if x['extra'] else x['hearts']), x['name'].lower()))
