@@ -672,6 +672,8 @@ function openSources(actor) {
   S.sourceModal = true;
   S.modal = false;
   $('#settings').hidden = true;
+  const settingsBtn = $('#btn-settings');
+  if (settingsBtn) settingsBtn.setAttribute('aria-pressed', 'false');
   const el = $('#sources');
   el.hidden = false;
   renderSources();
