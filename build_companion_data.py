@@ -549,6 +549,16 @@ class Builder:
                     'key': set_key, 'name': set_name, 'series': row['series'],
                     'bonus': row['set_bonus'],
                 }
+        # A one-piece "set" reads better under the piece name than under an
+        # internal series label such as Ancient or NewHero.
+        pieces_per_set = collections.defaultdict(set)
+        for row in self.armor_raw.values():
+            pieces_per_set[row['set_key']].add(row['base'])
+        for row in self.armor_raw.values():
+            if len(pieces_per_set[row['set_key']]) == 1:
+                row['set_name'] = self.name(row['base'])
+                if row['set_key'] in sets:
+                    sets[row['set_key']]['name'] = row['set_name']
         catalog = []
         for actor, row in sorted(self.armor_raw.items(), key=lambda kv: (kv[1]['set_key'], SLOT_ORDER.get(kv[1]['slot'], 9), kv[1]['rank'])):
             catalog.append(row)
