@@ -1,9 +1,11 @@
 # Built from your own copy of the game; never shared
 cookdata.json
 ui/icons/
+ui/companion_data/
 
 # Per-machine state
 settings.json
+companion_settings.json
 *.log
 __pycache__/
 .venv/

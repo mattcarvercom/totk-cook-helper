@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TotK Companion</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="companion.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="q1" clipPathUnits="userSpaceOnUse"><rect x="0" y="12" width="12" height="12"/></clipPath>
+    <clipPath id="q2" clipPathUnits="userSpaceOnUse"><rect x="0" y="0" width="12" height="24"/></clipPath>
+    <clipPath id="q3" clipPathUnits="userSpaceOnUse"><path d="M0 0h24v12H12v12H0z"/></clipPath>
+  </defs>
+</svg>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v2.5a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M2.5 11h19M9 5.5c0 1.2 1 1.6 1 2.8M13 4.5c0 1.3 1 1.7 1 3"/><path d="M8 19.5l-1 2M16 19.5l1 2"/></svg>
+      <span>TotK Companion</span>
+    </div>
+    <nav class="mainnav" id="nav" role="tablist" aria-label="Sections"></nav>
+    <div class="winbtns">
+      <button class="wb" id="btn-refresh" title="Refresh now" aria-label="Refresh now">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5V10H14"/></svg>
+      </button>
+      <button class="wb" id="btn-settings" title="Settings" aria-label="Settings" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+      <button class="wb" id="btn-min" title="Minimize" aria-label="Minimize">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5h12"/></svg>
+      </button>
+      <button class="wb close" id="btn-close" title="Close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="pages" id="pages">
+    <section class="page" id="page-status" data-page="status"></section>
+
+    <section class="page" id="page-inventory" data-page="inventory" hidden>
+      <div class="split">
+        <div class="pane-main">
+          <div class="toolbar">
+            <div class="chips" id="inv-cats"></div>
+            <label class="filter">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+              <input id="inv-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter inventory">
+              <kbd>/</kbd>
+            </label>
+          </div>
+          <div class="gridwrap"><div class="grid" id="inv-grid"></div></div>
+        </div>
+        <aside class="detail" id="inv-detail" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="page" id="page-armor" data-page="armor" hidden>
+      <div class="split">
+        <div class="pane-main">
+          <div class="toolbar">
+            <div class="chips" id="armor-slots"></div>
+            <div class="toolright">
+              <label class="switchrow"><button class="switch" id="armor-owned" role="switch" aria-checked="false"></button><span>Owned only</span></label>
+              <select id="armor-set" class="select" aria-label="Filter by set"></select>
+              <label class="filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+                <input id="armor-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter armor">
+              </label>
+            </div>
+          </div>
+          <div class="gridwrap"><div class="grid" id="armor-grid"></div></div>
+        </div>
+        <aside class="detail" id="armor-detail" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="page" id="page-map" data-page="map" hidden>
+      <div class="map-layout">
+        <div class="map-main">
+          <div class="map-toolbar">
+            <div class="seg" id="map-layers"></div>
+            <div class="seg" id="map-found"></div>
+            <label class="filter map-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+              <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place">
+            </label>
+            <div class="map-zoom">
+              <button class="btn" id="map-zoomin" title="Zoom in">+</button>
+              <button class="btn" id="map-zoomout" title="Zoom out">−</button>
+              <button class="btn" id="map-fit" title="Fit map">Fit</button>
+              <button class="btn" id="map-me" title="Center on Link">Link</button>
+            </div>
+          </div>
+          <div class="map-viewport" id="map-viewport">
+            <img id="map-img" alt="" draggable="false">
+            <canvas id="map-canvas"></canvas>
+            <div class="map-loading" id="map-loading">Loading map…</div>
+            <div class="map-compass" aria-hidden="true"><span>N</span></div>
+          </div>
+        </div>
+        <aside class="map-side">
+          <div id="map-detail" class="map-detail"></div>
+          <h3 class="label">Layers and markers</h3>
+          <div class="map-cats" id="map-cats"></div>
+          <h3 class="label">Near Link</h3>
+          <div class="nearby" id="map-nearby"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="page" id="page-progress" data-page="progress" hidden>
+      <div class="progress-head" id="progress-head"></div>
+      <div class="progress-controls">
+        <div class="chips" id="progress-cats"></div>
+        <div class="toolright">
+          <div class="seg" id="progress-mode"></div>
+          <label class="filter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+            <input id="progress-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter places">
+          </label>
+        </div>
+      </div>
+      <div class="progress-list" id="progress-list"></div>
+    </section>
+
+    <section class="page" id="page-compendium" data-page="compendium" hidden>
+      <div class="split">
+        <div class="pane-main">
+          <div class="toolbar">
+            <div class="chips" id="comp-groups"></div>
+            <div class="toolright">
+              <div class="seg" id="comp-states"></div>
+              <label class="filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+                <input id="comp-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter compendium">
+              </label>
+            </div>
+          </div>
+          <div class="gridwrap"><div class="grid comp-grid" id="comp-grid"></div></div>
+        </div>
+        <aside class="detail" id="comp-detail" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="page" id="page-cook" data-page="cook" hidden>
+      <div class="split">
+        <div class="pane-main">
+          <div class="toolbar">
+            <div class="chips" id="cook-fx"></div>
+            <div class="toolright">
+              <div class="seg" id="cook-sort"></div>
+              <label class="filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+                <input id="cook-filter" type="text" spellcheck="false" autocomplete="off" placeholder="Filter dishes">
+              </label>
+            </div>
+          </div>
+          <div class="gridwrap"><div class="grid" id="cook-grid"></div></div>
+        </div>
+        <aside class="detail" id="cook-detail" aria-live="polite"></aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusline">
+    <span id="save"></span>
+    <span class="hint" id="hint"></span>
+  </footer>
+</div>
+
+<div class="modal" id="settings" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<script src="companion.js"></script>
+</body>
+</html>

@@ -97,7 +97,46 @@ another recipe or gather the ingredients again.
 This mode has no controller combo and no global hotkey. Use the window's own
 minimize and close buttons.
 
-## Controls
+## Linux companion
+
+The companion is a separate window built from the same game files. It reads the
+newest save and shows Link's status, the full pouch, armor and upgrade
+materials, the map, collectible completion, the Hyrule Compendium and the
+cooking list. It is read-only: it never writes to the save or to the game, and
+it does not read game memory. The map marker moves when the game writes a save.
+
+Build the companion data once, and again after a game update:
+
+```bash
+python3 build_companion_data.py /path/to/TotK
+```
+
+The build reads the port's `romfs` and writes `ui/companion_data/` with icons,
+map layers, text and the catalog. Those files come from your own copy of the
+game and are gitignored. The collectible coordinates are the only pre-computed
+input, documented in `data/NOTICE.md`.
+
+Run it from the repository root:
+
+```bash
+./totk-companion.sh --game /path/to/TotK --poll 15
+```
+
+`--check` prints the save, heart, rupee, inventory, completion and compendium
+counts without opening the window. `--poll N` sets the save scan interval in
+seconds (default 15).
+
+The map has Surface, Sky and Depths layers. Click a marker for its name,
+position and distance from Link, or use **Near Link** to see the closest
+collectibles first. Completion lists every tracked category and can show only
+missing entries. The armor page shows every set, the owned level, and the
+materials needed for the next upgrade.
+
+Companion shortcuts: `/` focuses the active filter, `1` to `7` switch sections,
+`r` refreshes, and Esc clears a filter or closes settings. The save slot is
+chosen in Settings; Auto follows the newest save.
+
+## Cook Helper controls
 
 | Action | Controller | Keyboard |
 | --- | --- | --- |
@@ -148,6 +187,10 @@ SHA-256 of `SDL3.dll`: `c8c1e6227635240bd2ac916dc8bf89525a4061dc236cd269e73df405
 
 Hearts and durations are estimates. Critical cooks, Monster Extract and effect levels are not modelled. A port update
 that changes the game's memory layout can break the live read. The helper then falls back to the save file.
+
+The companion is read-only and covers status, inventory, armor, map, collectibles, the compendium and cooking. It does
+not include the Adventure Log, Autobuild blueprints or live item actions; those need data or game hooks that the save
+alone does not provide.
 
 ## Credits
 
