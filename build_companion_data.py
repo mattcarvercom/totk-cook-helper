@@ -20,7 +20,7 @@ import struct
 import sys
 import time
 
-from PIL import Image, ImageChops, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 import build_data
 import build_icons
@@ -72,15 +72,15 @@ CATEGORIES = {
 # Map marker textures from UI/LayoutArchive/Common.blarc, timg/__Combined.bntx.
 # These are the game's own map icon shapes; each is tinted with its category color.
 MAP_ICON_SOURCES = {
-    'shrines': 'MapIconDungeon_L_Icon',
-    'lightroots': 'Nt_MapChallengeIcon_00',
+    'shrines': 'Nt_MapDungeonNew_02',
+    'lightroots': None,
     'hidden_koroks': 'MapIconKorok_x2',
     'carry_koroks': 'MapIconKorok_x2',
     'bubbuls': 'MapIconCaveM_72x72',
     'locations': 'MapIconFrontierPoint_64x64',
     'caves': 'MapIconCaveM_72x72',
     'wells': 'MapIconCaveS_72x72',
-    'chasms': 'MapIconCaveS_72x72',
+    'chasms': 'MapIconCaveL_72x72',
     'hinoxes': 'MapIconSkull_72x72',
     'taluses': 'MapIconSkull_72x72',
     'moldugas': 'MapIconSkull_72x72',
@@ -88,10 +88,22 @@ MAP_ICON_SOURCES = {
     'froxes': 'MapIconSkull_72x72',
     'gleeoks': 'MapIconSkull_72x72',
     'old_maps': 'MapIconTreasureBox_72x72',
-    'sages_wills': 'SageWillPouchIcon_00',
+    'sages_wills': None,
     'addison_signposts': 'MapIconBuildingNewsPaper_58x58',
     'schema_stones': 'MapIconRelief_00',
     'yiga_schematics': 'MapIconShopEvil_58x58',
+}
+MAP_ICON_FRAMES = {'shrines': 'Nt_MapDungeonNewF_01'}
+MAP_ICON_ITEM_SOURCES = {
+    'bubbuls': 'CaveMasterMedal',
+    'sages_wills': 'Obj_SageWill',
+    'old_maps': 'Obj_TreasureMap_00',
+    'schema_stones': 'Obj_AutoBuilderDraft_00',
+    'yiga_schematics': 'Obj_AutoBuilderDraftAssassin_00',
+}
+MAP_ICON_COLORS = {
+    'shrines': '#4fb8f0', 'hidden_koroks': '#e6c15a', 'carry_koroks': '#f0d77a',
+    'lightroots': '#b98cff', 'sages_wills': '#f1e28a',
 }
 
 LAYER_LABEL = {'surface': 'Surface', 'sky': 'Sky', 'depths': 'Depths'}
@@ -157,6 +169,44 @@ def tint_icon(img, color):
     mask = ImageChops.lighter(ImageChops.lighter(r, g), b)
     out = Image.new('RGBA', img.size, rgb + (0,))
     out.putalpha(mask)
+    return out
+
+
+def composite_icon(base, frame, size=96):
+    base = base.convert('RGBA').resize((size, size), Image.LANCZOS)
+    if frame is None:
+        return base
+    frame = frame.convert('RGBA').resize((size, size), Image.LANCZOS)
+    out = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    out.alpha_composite(base)
+    out.alpha_composite(frame)
+    return out
+
+
+def make_lightroot_icon(color, size=96):
+    """Draw the Depths lightroot teardrop with the game's diamond gem."""
+    mask = Image.new('L', (size, size), 0)
+    d = ImageDraw.Draw(mask)
+    d.ellipse((18, 8, 78, 64), fill=255)
+    d.polygon([(18, 38), (78, 38), (48, 94)], fill=255)
+    # Soft dark outline.
+    outline = mask.filter(ImageFilter.MaxFilter(7))
+    out = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    dark = Image.new('RGBA', (size, size), (8, 8, 16, 190))
+    out.paste(dark, (0, 0), outline)
+    c = color.lstrip('#')
+    rgb = (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+    grad = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    for y in range(size):
+        t = y / max(1, size - 1)
+        col = (
+            int(rgb[0] * (0.62 + 0.38 * (1 - t))),
+            int(rgb[1] * (0.62 + 0.38 * (1 - t))),
+            int(rgb[2] * (0.62 + 0.38 * (1 - t))),
+            255,
+        )
+        ImageDraw.Draw(grad).line([(0, y), (size, y)], fill=col)
+    out.paste(grad, (0, 0), mask)
     return out
 
 
@@ -491,8 +541,10 @@ class Builder:
     def build_map(self):
         cell_px = MAP_LOD.get(self.lod, 300)
         os.makedirs(MAP, exist_ok=True)
-        tile_re = re.compile(r'UI/Map/MainField/([GS])_(\d+)-(\d+)_(\d+)_(.+)\.bntx\.zs$')
-        cells = {'G': {}, 'S': {}}
+        # G/S cells carry F/T terrain/fog suffixes; the Depths U cells are a
+        # single texture per grid cell and use the same 12x10 layout.
+        tile_re = re.compile(r'UI/Map/MainField/([GSU])_(\d+)-(\d+)_(\d+)(?:_([A-Za-z0-9_]+))?\.bntx\.zs$')
+        cells = {'G': {}, 'S': {}, 'U': {}}
         for path in self.rf.files:
             m = tile_re.match(path)
             if not m:
@@ -500,15 +552,15 @@ class Builder:
             layer, x, y, z, suffix = m.groups()
             if int(z) != self.lod:
                 continue
-            cells[layer].setdefault((int(x), int(y)), {})[suffix] = path
+            cells[layer].setdefault((int(x), int(y)), {})[suffix or ''] = path
         cols, rows = 12, 10
         images = {}
-        for layer, bg in (('G', (10, 15, 25)), ('S', (5, 8, 14))):
+        for layer, bg, label in (('G', (10, 15, 25), 'Surface'), ('S', (5, 8, 14), 'Sky'), ('U', (4, 6, 10), 'Depths')):
             canvas = Image.new('RGB', (cols * cell_px, rows * cell_px), bg)
             filled = 0
             for (x, y), entries in sorted(cells[layer].items()):
-                suffix = pick_tile_suffix(entries)
-                if not suffix:
+                suffix = pick_tile_suffix(entries) if layer != 'U' else ('' if '' in entries else None)
+                if suffix is None:
                     continue
                 try:
                     img = build_icons.decode_bntx(self.rf.read(entries[suffix])).convert('RGB')
@@ -520,10 +572,10 @@ class Builder:
                 canvas.paste(img, (x * cell_px, y * cell_px))
                 filled += 1
             images[layer] = canvas
-            log('map %s: %d/%d cells filled' % (LAYER_LABEL['sky' if layer == 'S' else 'surface'], filled, cols * rows))
+            log('map %s: %d/%d cells filled' % (label, filled, cols * rows))
         surface = images['G']
         sky = images['S']
-        depth = ImageOps.colorize(ImageOps.grayscale(surface), black=(3, 6, 12), white=(32, 58, 68))
+        depth = images['U'] if cells['U'] else ImageOps.colorize(ImageOps.grayscale(surface), black=(3, 6, 12), white=(32, 58, 68))
         surface.save(os.path.join(MAP, 'surface.webp'), 'WEBP', quality=88, method=6)
         sky.save(os.path.join(MAP, 'sky.webp'), 'WEBP', quality=88, method=6)
         depth.save(os.path.join(MAP, 'depths.webp'), 'WEBP', quality=86, method=6)
@@ -569,21 +621,85 @@ class Builder:
             textures[name.split('^')[0]] = off
         os.makedirs(MAPICONS, exist_ok=True)
         out = {}
-        for cat, source in MAP_ICON_SOURCES.items():
+        states = {}
+
+        def decode(source):
             off = textures.get(source)
             if off is None:
                 log('map icons: missing texture', source)
-                continue
+                return None
             try:
-                img = build_icons.decode_bntx(bntx, off)
+                return build_icons.decode_bntx(bntx, off)
             except Exception as e:
                 log('map icons: cannot decode %s: %s' % (source, e))
-                continue
-            img = tint_icon(img, CATEGORIES[cat]['color'])
-            fname = cat + '.webp'
+                return None
+
+        def save_icon(name, img):
+            if img is None:
+                return None
+            fname = name + '.webp'
             img.save(os.path.join(MAPICONS, fname), 'WEBP', quality=90, method=6)
-            out[cat] = 'mapicons/' + fname
+            return 'mapicons/' + fname
+
+        # Shrines use the blue diamond seen on the map, with the three game
+        # states: orange, orange plus blue frame, and fully blue.
+        shrine_fill = decode('Nt_MapDungeonNew_02')
+        shrine_frame = decode('Nt_MapDungeonNewF_01')
+        if shrine_fill is not None:
+            def shrine_icon(fill, frame):
+                return composite_icon(tint_icon(shrine_fill, fill),
+                                      tint_icon(shrine_frame, frame) if shrine_frame is not None else None)
+            states['shrines'] = {
+                '0': save_icon('shrines_missing', shrine_icon('#e39a55', '#e39a55')),
+                '1': save_icon('shrines_started', shrine_icon('#e39a55', '#58c8f5')),
+                '2': save_icon('shrines_done', shrine_icon('#58c8f5', '#b8ecff')),
+            }
+            out['shrines'] = states['shrines']['2']
+
+        # The lightroot is a teardrop with a diamond gem; the pause-map ring
+        # texture is only the gem, so build the root silhouette around it.
+        gem = decode('Nt_MapDungeonNewF_01')
+        def lightroot(color):
+            img = make_lightroot_icon(color)
+            if gem is not None:
+                g = tint_icon(gem, '#e2f5ff').resize((34, 34), Image.LANCZOS)
+                img.alpha_composite(g, (31, 14))
+            return img
+        states['lightroots'] = {
+            '0': save_icon('lightroots_missing', lightroot('#6d5a8c')),
+            '2': save_icon('lightroots_done', lightroot('#b98cff')),
+        }
+        out['lightroots'] = states['lightroots']['2']
+
+        for cat, source in MAP_ICON_SOURCES.items():
+            if cat in ('shrines', 'lightroots'):
+                continue
+            color = MAP_ICON_COLORS.get(cat, CATEGORIES[cat]['color'])
+            img = None
+            if cat in MAP_ICON_ITEM_SOURCES:
+                name = MAP_ICON_ITEM_SOURCES[cat]
+                path = 'UI/Tex/Icon/%s.bntx.zs' % name
+                if path in self.rf.files:
+                    try:
+                        img = build_icons.decode_bntx(self.rf.read(path))
+                    except Exception as e:
+                        log('map icons: cannot decode %s: %s' % (name, e))
+                if img is None:
+                    img = decode(source)
+            else:
+                img = decode(source)
+                if img is not None:
+                    img = tint_icon(img, color)
+                    frame_src = MAP_ICON_FRAMES.get(cat)
+                    if frame_src:
+                        frame = decode(frame_src)
+                        if frame is not None:
+                            img = composite_icon(img, tint_icon(frame, '#d6f4ff'))
+            if img is None:
+                continue
+            out[cat] = save_icon(cat, img)
         self.catalog['map_icons'] = out
+        self.catalog['map_icon_states'] = states
         log('map icons: %d exported' % len(out))
 
     # --- run ------------------------------------------------------------------

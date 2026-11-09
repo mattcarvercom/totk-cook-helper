@@ -211,7 +211,7 @@ async function start() {
   if (!NAV.some((x) => x[0] === S.page)) S.page = 'status';
   // Keep the first map readable; the sidebar can show every category.
   const defaults = ['shrines', 'lightroots', 'wells', 'chasms', 'old_maps', 'sages_wills',
-                    'addison_signposts', 'schema_stones', 'yiga_schematics'];
+                    'schema_stones'];
   for (const c of defaults) S.map.cats.add(c);
   for (const c of (cat().collectible_categories || [])) if (!defaults.includes(c.key)) S.map.cats.delete(c.key);
   loadMapIcons();
@@ -252,14 +252,24 @@ function rebuildMaterialCounts() {
 
 function loadMapIcons() {
   S.map.iconImages = {};
-  const icons = cat().map_icons || {};
-  Object.keys(icons).forEach((key) => {
+  const files = new Set(Object.values(cat().map_icons || {}));
+  for (const stateMap of Object.values(cat().map_icon_states || {})) {
+    for (const file of Object.values(stateMap || {})) files.add(file);
+  }
+  files.forEach((file) => {
+    if (!file) return;
     const img = new Image();
     img.decoding = 'async';
     img.onload = () => requestDraw();
-    img.src = 'companion_data/' + icons[key];
-    S.map.iconImages[key] = img;
+    img.src = 'companion_data/' + file;
+    S.map.iconImages[file] = img;
   });
+}
+
+function mapIconFile(category, state) {
+  const states = (cat().map_icon_states || {})[category];
+  if (states && states[String(state)]) return states[String(state)];
+  return (cat().map_icons || {})[category] || null;
 }
 
 function showPage(key, first) {
@@ -737,7 +747,7 @@ function renderMapCats() {
     const iconFile = (cat().map_icons || {})[c.key];
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
-      : `<span class="dot" style="background:${c.color};color:${c.color}"></span>`;
+      : '';
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
       `${marker}<span>${esc(c.label)}</span><span class="n">${n.complete}/${n.total}</span></button>`;
   }).join('');
@@ -757,7 +767,7 @@ function renderMapDetail() {
   const p = playerPos();
   const d = p ? dist3(p, item) : null;
   const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
-  const iconFile = (cat().map_icons || {})[item.cat];
+  const iconFile = mapIconFile(item.cat, st);
   el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
     `<div class="k">Status</div><div class="v">${state}</div>` +
     `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
@@ -783,7 +793,10 @@ function renderNearby() {
     const d = p ? dist3(p, x.item) : null;
     const meta = catMeta(x.item.cat);
     const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
-    return `<button data-midx="${x.index}"><span><span>${esc(x.item.name)}</span>` +
+    const iconFile = mapIconFile(x.item.cat, x.state);
+    return `<button data-midx="${x.index}">` +
+      (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
+      `<span><span>${esc(x.item.name)}</span>` +
       `<span class="meta">${esc(meta.label)} · ${state}</span></span>` +
       `<span class="dist">${d === null ? '' : fmtDist(d)}</span></button>`;
   }).join('');
@@ -991,7 +1004,8 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   const meta = catMeta(it.cat);
   const color = meta.color;
   const st = xitem.state;
-  const icon = S.map.iconImages && S.map.iconImages[it.cat];
+  const iconFile = mapIconFile(it.cat, st);
+  const icon = iconFile && S.map.iconImages && S.map.iconImages[iconFile];
   const alpha = st >= 2 ? 0.30 : st === 1 ? 0.55 : 0.98;
   if (icon && icon.complete && icon.naturalWidth) {
     const max = clamp(12 + Math.log2(S.map.zoom + 3) * 2.8, 14, 30);
@@ -1017,7 +1031,9 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   if (kind === 'shrine') {
     ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
   } else if (kind === 'lightroot') {
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x, y - r * 0.12, r * 0.78, Math.PI, 0);
+    ctx.lineTo(x, y + r);
+    ctx.closePath();
   } else if (kind === 'korok') {
     ctx.ellipse(x, y, r * 0.78, r * 1.08, Math.PI / 4, 0, Math.PI * 2);
   } else if (kind === 'boss') {
@@ -1039,7 +1055,7 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
     }
     ctx.closePath();
   } else {
-    ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
+    ctx.moveTo(x, y - r * 0.8); ctx.lineTo(x + r * 0.72, y); ctx.lineTo(x, y + r * 0.8); ctx.lineTo(x - r * 0.72, y); ctx.closePath();
   }
   ctx.fill();
   ctx.stroke();
@@ -1130,8 +1146,9 @@ function renderProgress() {
     const d = p ? dist3(p, x.item) : null;
     const meta = catMeta(x.item.cat);
     const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
+    const iconFile = mapIconFile(x.item.cat, x.state);
     return `<div class="prow${x.state >= 2 ? ' found' : x.state === 1 ? ' started' : ''}">` +
-      `<span class="dot" style="background:${meta.color};color:${meta.color}"></span>` +
+      (iconFile ? `<img class="pico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
       `<span><span class="pn">${esc(x.item.name)}</span><span class="pm">${layerLabel(x.item.layer)}${d !== null ? ` · ${fmtDist(d)}` : ''}</span></span>` +
       `<span class="pd">${state}</span><button class="go" data-midx="${x.index}">Map</button></div>`;
   }).join('') : `<div class="empty"><b>Nothing here</b>No places match this filter.</div>`;
