@@ -734,9 +734,12 @@ function renderMapCats() {
   const el = $('#map-cats');
   el.innerHTML = (cat().collectible_categories || []).filter((c) => counts[c.key]).map((c) => {
     const n = counts[c.key];
+    const iconFile = (cat().map_icons || {})[c.key];
+    const marker = iconFile
+      ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
+      : `<span class="dot" style="background:${c.color};color:${c.color}"></span>`;
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
-      `<span class="dot" style="background:${c.color};color:${c.color}"></span>` +
-      `<span>${esc(c.label)}</span><span class="n">${n.complete}/${n.total}</span></button>`;
+      `${marker}<span>${esc(c.label)}</span><span class="n">${n.complete}/${n.total}</span></button>`;
   }).join('');
 }
 function renderMapDetail() {
