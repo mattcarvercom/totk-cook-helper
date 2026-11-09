@@ -431,6 +431,14 @@ const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: '
 const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'villages', 'stables',
                           'great_fairies', 'labs', 'challenges', 'wells', 'chasms',
                           'old_maps', 'sages_wills', 'schema_stones'];
+const MAP_CAT_ORDER = ['shrines', 'towers', 'lightroots', 'stables', 'caves', 'villages',
+                       'wells', 'great_fairies', 'labs', 'shops', 'dispensers',
+                       'challenges', 'dragon_tears', 'chasms', 'locations',
+                       'hidden_koroks', 'carry_koroks', 'bubbuls', 'hinoxes', 'taluses',
+                       'moldugas', 'flux_constructs', 'froxes', 'gleeoks', 'old_maps',
+                       'sages_wills', 'addison_signposts', 'schema_stones',
+                       'yiga_schematics'];
+const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -1878,7 +1886,11 @@ function renderMapCats() {
       `${medIcon ? `<img class="mico" src="companion_data/icons/${encodeURIComponent(medIcon)}" alt="">` : ''}` +
       `<span>Travel medallions</span><span class="n">${allMedals.length}</span></button>`
     : '';
-  el.innerHTML = medRow + (cat().collectible_categories || []).filter((c) => counts[c.key]).map((c) => {
+  const ordered = (cat().collectible_categories || []).filter((c) => counts[c.key])
+    .sort((a, b) => (MAP_CAT_RANK.has(a.key) ? MAP_CAT_RANK.get(a.key) : 999) -
+                    (MAP_CAT_RANK.has(b.key) ? MAP_CAT_RANK.get(b.key) : 999) ||
+                    a.label.localeCompare(b.label));
+  el.innerHTML = medRow + ordered.map((c) => {
     const n = counts[c.key];
     const iconFile = (cat().map_icons || {})[c.key];
     const marker = iconFile
@@ -2350,7 +2362,7 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   const icon = iconFile && S.map.iconImages && S.map.iconImages[iconFile];
   const alpha = st >= 2 ? 0.30 : st === 1 ? 0.55 : 0.98;
   if (icon && icon.complete && icon.naturalWidth) {
-    const max = clamp(12 + Math.log2(S.map.zoom + 3) * 2.8, 14, 30);
+    const max = clamp(14 + Math.log2(S.map.zoom + 3) * 3.2, 17, 34);
     const scale = max / Math.max(icon.naturalWidth, icon.naturalHeight);
     const dw = icon.naturalWidth * scale, dh = icon.naturalHeight * scale;
     ctx.save();

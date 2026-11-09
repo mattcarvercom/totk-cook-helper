@@ -320,6 +320,29 @@ def pick_tile_suffix(entries):
     return None
 
 
+def compose_sky_display(surface_display, sky_display):
+    """Layer Hyrule, translucent clouds, then opaque sky islands.
+
+    The sky tiles are a cloud sheet with the islands baked in. The island
+    pixels are the warm/saturated land colours and the blue island water, so
+    they can be separated from the low-saturation cloud background.
+    """
+    hsv = sky_display.convert('HSV')
+    h, s, v = hsv.split()
+    warm = h.point(lambda x: 255 if 10 <= x <= 67 else 0)
+    cool = h.point(lambda x: 255 if 113 <= x <= 163 else 0)
+    saturated = s.point(lambda x: 255 if x > 30 else 0)
+    bright = v.point(lambda x: 255 if x > 158 else 0)
+    bright_sat = s.point(lambda x: 255 if x > 20 else 0)
+    land = ImageChops.multiply(saturated, ImageChops.lighter(warm, cool))
+    pale = ImageChops.multiply(bright, ImageChops.multiply(bright_sat, warm))
+    mask = ImageChops.lighter(land, pale)
+    mask = mask.filter(ImageFilter.MedianFilter(3))
+    mask = mask.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+    cloud = Image.blend(surface_display, sky_display, 0.35)
+    return Image.composite(sky_display, cloud, mask)
+
+
 def point_in_ring(x, z, ring):
     inside = False
     n = len(ring)
@@ -1328,10 +1351,7 @@ class Builder:
             if key == 'surface':
                 surface_display = display.copy()
             elif key == 'sky' and surface_display is not None:
-                # The sky tiles carry an opaque cloud sheet. Blend the surface
-                # underneath and lighten it so roads and terrain stay visible.
-                display = Image.blend(surface_display, display, 0.62)
-                display = ImageEnhance.Brightness(display).enhance(1.10)
+                display = compose_sky_display(surface_display, display)
             display.save(os.path.join(MAP, key + '-display.webp'), 'WEBP', quality=86, method=6)
             layers[key] = {'label': key.title(), 'image': 'map/%s-display.webp' % key}
         meta = {
@@ -1427,9 +1447,27 @@ class Builder:
                 log('map icons: cannot decode %s: %s' % (source, e))
                 return None
 
+        def trim_icon(img, pad=1, threshold=6):
+            """Trim transparent margins so every marker has the same visual weight."""
+            if img is None:
+                return None
+            img = img.convert('RGBA')
+            alpha = img.getchannel('A')
+            mask = alpha.point(lambda v: 255 if v > threshold else 0)
+            bbox = mask.getbbox()
+            if not bbox:
+                return img
+            x0, y0, x1, y1 = bbox
+            x0 = max(0, x0 - pad)
+            y0 = max(0, y0 - pad)
+            x1 = min(img.width, x1 + pad)
+            y1 = min(img.height, y1 + pad)
+            return img.crop((x0, y0, x1, y1))
+
         def save_icon(name, img):
             if img is None:
                 return None
+            img = trim_icon(img)
             fname = name + '.webp'
             img.save(os.path.join(MAPICONS, fname), 'WEBP', quality=90, method=6)
             return 'mapicons/' + fname

@@ -133,13 +133,16 @@ rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
 map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges and landmarks are separate map layers, each with its
-game marker art. **Reveal full map** is off by default, so the map starts with
-the terrain you have revealed in the game. The fog only covers terrain; markers
-remain visible over unexplored areas. The Sky layer blends its cloud sheet with
-the Surface map so roads and terrain remain visible underneath. Surface and Sky
-use the Skyview Tower region boundaries, and the Depths reveal the Field Map
-Area around each activated Lightroot, so the shapes are regions rather than
-circles. Travel
+game marker art. Marker images are trimmed to their visible bounds so small
+icons such as wells use the same size on the map. The layer list runs from
+fast travel and major places down to collectibles instead of sorting by marker
+count. **Reveal full map** is off by default, so the map starts with the
+terrain you have revealed in the game. The fog only covers terrain; markers
+remain visible over unexplored areas. The Sky layer draws the Hyrule base,
+translucent clouds, then the sky islands on top so the islands stay clear.
+Surface and Sky use the Skyview Tower region boundaries, and the Depths reveal
+the Field Map Area around each activated Lightroot, so the shapes are regions
+rather than circles. Travel
 Medallions have their own toggle in the left pane, appear only on their layer,
 and use the game's medallion art without a background plate. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
