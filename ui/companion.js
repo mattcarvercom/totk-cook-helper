@@ -12,8 +12,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const S = {
   catalog: null, d: null, version: -1, dataVersion: -1, page: 'status',
   settings: {}, booted: false, matCounts: {}, saves: [], selectedSave: '',
-  inv: { cat: 'weapons', filter: '', sel: null },
-  armor: { slot: '', owned: false, set: '', filter: '', sel: null },
+  inv: { cat: '', filter: '', sel: null },
+  armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'all', search: '', sel: null,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, iconImages: {},
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -118,10 +118,14 @@ function hearts(h, yellow, max) {
   return out;
 }
 function heartsWithMax(cur, max, yellow) {
-  let out = hearts(cur, yellow, 60);
-  const total = Math.ceil(Math.round(max * 4) / 4);
-  let n = Math.ceil(Math.round(cur * 4) / 4);
-  while (n < total && n < 60) { out += heart(0, yellow); n++; }
+  const total = Math.min(60, Math.ceil(Math.round(max * 4) / 4));
+  const quarters = Math.round(cur * 4);
+  const cells = [];
+  for (let i = 0; i < total; i++) cells.push(heart(clamp(quarters - i * 4, 0, 4), yellow));
+  let out = '';
+  for (let i = 0; i < cells.length; i += 20) {
+    out += `<div class="heart-row">${cells.slice(i, i + 20).join('')}</div>`;
+  }
   return out;
 }
 function fmtHearts(h) {
@@ -148,6 +152,72 @@ function dist3(a, b) {
 }
 function fmtDist(d) { return d === null ? '' : `${fmtNum(Math.round(d))} m`; }
 function layerLabel(l) { return l === 'sky' ? 'Sky' : l === 'depths' ? 'Depths' : 'Surface'; }
+function bearing(a, b) {
+  if (!a || !b) return null;
+  return Math.atan2(b.x - a.x, -(b.z - a.z)) * 180 / Math.PI;
+}
+function cardinal(deg) {
+  if (deg === null) return '';
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+function dirIcon(deg) {
+  if (deg === null) return '';
+  return `<span class="dir" style="--a:${deg.toFixed(1)}deg" title="${cardinal(deg)}">` +
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l6.5 19L12 16.8 5.5 21z"/></svg></span>`;
+}
+function normText(s) {
+  return String(s || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function editDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function fuzzyScore(query, text) {
+  const q = normText(query), t = normText(text);
+  if (!q) return 0;
+  if (t.includes(q)) return 1000 - t.indexOf(q);
+  const words = t.split(/\s+/);
+  const qwords = q.split(/\s+/);
+  if (qwords.length > 1 && qwords.every((w) => words.some((x) => x.startsWith(w)))) return 820;
+  if (q.length >= 2) {
+    let i = 0, gaps = 0, first = -1, last = -1;
+    for (let j = 0; j < t.length && i < q.length; j++) {
+      if (t[j] === q[i]) {
+        if (first < 0) first = j;
+        if (last >= 0) gaps += j - last - 1;
+        last = j;
+        i++;
+      }
+    }
+    const span = last - first + 1;
+    if (i === q.length && span <= q.length + 3) {
+      return Math.max(240, 560 - gaps * 6 - (span - q.length) * 5);
+    }
+  }
+  if (q.length >= 4) {
+    const max = Math.max(2, Math.floor(q.length / 3));
+    for (const w of words) {
+      if (w.length < 3 || Math.abs(w.length - q.length) > max) continue;
+      const dw = editDistance(q, w);
+      if (dw <= max) return 480 - dw * 30;
+    }
+    const d = editDistance(q, t);
+    if (d <= max) return 440 - d * 25;
+  }
+  return 0;
+}
 
 /* ------------------------------------------------------------------ nav/load */
 
@@ -203,7 +273,7 @@ function renderNav() {
   nav.querySelectorAll('svg').forEach((s) => { s.style.width = '16px'; s.style.height = '16px'; s.style.fill = 'none'; s.style.stroke = 'currentColor'; });
 }
 
-const INV_KEYS = ['weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
+const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
 const PROGRESS_MODES = ['all', 'missing', 'found'];
@@ -388,6 +458,66 @@ function findEquip(key, actor) {
   return null;
 }
 
+function staminaWheel(fill) {
+  const c = 2 * Math.PI * 12;
+  const dash = c * clamp(fill, 0, 1);
+  return `<svg class="wheel" viewBox="0 0 30 30" aria-hidden="true">` +
+    `<circle class="wb" cx="15" cy="15" r="12"/>` +
+    `<circle class="wf" cx="15" cy="15" r="12" stroke-dasharray="${dash.toFixed(2)} ${(c - dash).toFixed(2)}" transform="rotate(-90 15 15)"/>` +
+    `</svg>`;
+}
+
+function staminaGauge(wheels) {
+  const value = Number(wheels) || 0;
+  if (value <= 0) return '<span class="dimmed">None</span>';
+  const whole = Math.floor(value + 1e-6);
+  const frac = value - whole;
+  let out = '';
+  for (let i = 0; i < whole; i++) out += staminaWheel(1);
+  if (frac > 0.02) out += staminaWheel(frac);
+  return out;
+}
+
+function energyCell(fill) {
+  const p = clamp(fill, 0, 1);
+  const h = 25 * p;
+  return `<svg class="battery" viewBox="0 0 24 34" aria-hidden="true">` +
+    `<rect class="bt" x="9" y="1" width="6" height="3" rx="1"/>` +
+    `<rect class="bb" x="4" y="3" width="16" height="27" rx="3"/>` +
+    `<rect class="bf" x="7" y="${(28 - h).toFixed(2)}" width="10" height="${h.toFixed(2)}" rx="1.5"/>` +
+    `</svg>`;
+}
+
+function energyGauge(cells) {
+  const value = Number(cells) || 0;
+  if (value <= 0) return '<span class="dimmed">None</span>';
+  const whole = Math.floor(value + 1e-6);
+  const frac = value - whole;
+  let out = '';
+  for (let i = 0; i < whole; i++) out += energyCell(1);
+  if (frac > 0.02) out += energyCell(frac);
+  return out;
+}
+
+function sageTile(s) {
+  const state = s.is_follow ? 'Following' : s.is_summon ? 'Summoned' : s.is_get ? 'Ready' : 'Not met';
+  const known = s.is_get || s.is_follow || s.is_summon;
+  const icon = (cat().sage_icons || {})[s.key];
+  const avatar = icon
+    ? `<img class="sage-av" src="companion_data/icons/${encodeURIComponent(icon)}" alt="">`
+    : `<span class="sage-fallback">${esc((s.name || '?')[0])}</span>`;
+  return `<div class="sage${known ? ' on' : ''}${s.is_follow ? ' follow' : ''}" title="${esc(s.name)}: ${state}">` +
+    avatar + `<span class="sn">${esc(s.name)}</span><span class="ss">${state}</span></div>`;
+}
+
+function abilityChip(a) {
+  const meta = ainfo(a.actor);
+  const img = meta.icon
+    ? `<img class="ab-ic" src="companion_data/icons/${encodeURIComponent(meta.icon)}" alt="">`
+    : `<span class="ab-ic">${icon('golem', 'g')}</span>`;
+  return `<span class="ability">${img}<span>${esc(a.name)}</span></span>`;
+}
+
 function renderStatus() {
   const el = $('#page-status');
   const d = dyn();
@@ -409,59 +539,66 @@ function renderStatus() {
   const legs = findEquip('armor', eq.armor_lower && eq.armor_lower.actor);
   const matCount = invCat('materials').items.length;
   const foodCount = invCat('food').items.length;
-  const quick = (key, label, catKey) => {
+  const quick = (label, catKey) => {
     const c = cats[catKey];
     if (!c) return '';
     const done = c.complete;
-    return `<button class="quick" data-pcat="${catKey}"><span class="qk">${esc(label)}</span>` +
+    const meta = catMeta(catKey);
+    const iconFile = (cat().map_icons || {})[catKey];
+    const ico = iconFile ? `<img class="qico" src="companion_data/${encodeURIComponent(iconFile)}" alt="">` : '';
+    return `<button class="quick" data-pcat="${catKey}" style="--c:${meta.color}">` +
+      `<span class="qk">${ico}${esc(label)}</span>` +
       `<span class="qv">${done}<small> / ${c.total}</small></span>` +
       `<span class="qs">${c.missing} missing${c.started ? ` · ${c.started} started` : ''}</span>` +
       `<span class="bar"><i style="width:${pct(done, c.total)}%"></i></span></button>`;
   };
-  const sages = (st.sages || []).map((s) => {
-    const state = s.is_follow ? 'Following' : s.is_summon ? 'Summoned' : s.is_get ? 'Ready' : 'Not met';
-    return `<div class="sage${s.is_get ? ' on' : ''}"><span class="sn">${esc(s.name)}</span><span class="ss">${state}</span></div>`;
-  }).join('');
-  const abilities = (st.abilities || []).map((a) => `<span class="ability">${esc(a.name)}</span>`).join('') || '<span class="dimmed">None yet</span>';
+  const sages = (st.sages || []).map(sageTile).join('');
+  const abilities = (st.abilities || []).map(abilityChip).join('') || '<span class="dimmed">None yet</span>';
   const pos = st.position || {};
-  const playtime = st.playtime ? `<span class="stat"><span class="k">Playtime</span><span class="v">${Math.floor(st.playtime / 3600)}<small>h</small></span></span>` : '';
+  const layer = st.layer || st.map_layer || 'Surface';
+  const staminaMax = Number((st.stamina || {}).max) || 0;
+  const energyMax = Number((st.energy || {}).max) || 0;
+  const playHours = st.playtime ? Math.floor(st.playtime / 3600) : null;
+  const rupee = ainfo('PutRupee_Gold');
+  const rupeeIcon = rupee.icon ? `<img class="rupee-icon" src="companion_data/icons/${encodeURIComponent(rupee.icon)}" alt="">` : '';
   el.innerHTML = `
   <div class="status-grid">
-    <section class="card hero wide">
-      <div>
+    <section class="card hero status-main">
+      <div class="status-top">
         <div class="who">
           <div class="mark">${icon('check', 'g')}</div>
-          <div><h1 class="h-name">${fmtHearts(st.hearts.current)} <small style="font-size:14px;color:var(--dim)">/ ${fmtHearts(st.hearts.max)} hearts</small></h1>
-            <div class="h-sub">${esc(st.layer || st.map_layer || 'Surface')} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div></div>
+          <div><h1 class="h-name">Link</h1>
+            <div class="h-sub">${esc(layer)} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div></div>
         </div>
-        <div class="hearts">${heartsWithMax(st.hearts.current, st.hearts.max, false)}</div>
-        <div class="h-line">${fmtHearts(st.hearts.current)} of ${fmtHearts(st.hearts.max)} hearts filled</div>
+        <div class="rupees">${rupeeIcon}<span>${fmtNum(st.rupees)}</span><small>RUPEES</small></div>
       </div>
-      <div class="rupees">${fmtNum(st.rupees)}<small>RUPEES</small></div>
-    </section>
+      <div class="hearts">${heartsWithMax(st.hearts.current, st.hearts.max, false)}</div>
+      <div class="h-line">${fmtHearts(st.hearts.current)} of ${fmtHearts(st.hearts.max)} hearts filled</div>
 
-    <section class="card">
-      <h3>Link</h3>
-      <div class="statrow">
-        <span class="stat"><span class="k">Stamina</span><span class="v">${(st.stamina.max || 0).toFixed(1)}<small> wheels</small></span></span>
-        <span class="stat"><span class="k">Energy</span><span class="v">${(st.energy.max || 0).toFixed(1)}<small> cells</small></span></span>
-        <span class="stat"><span class="k">Materials</span><span class="v">${matCount}</span></span>
-        ${playtime}
+      <div class="vitals">
+        <div class="vital">
+          <span class="vk">Stamina</span>
+          <div class="gauge">${staminaGauge(staminaMax)}</div>
+          <span class="vv">${staminaMax.toFixed(1)} wheels</span>
+        </div>
+        <div class="vital">
+          <span class="vk">Energy</span>
+          <div class="gauge">${energyGauge(energyMax)}</div>
+          <span class="vv">${energyMax.toFixed(1)} cells</span>
+        </div>
+        <div class="vital">
+          <span class="vk">Materials</span>
+          <span class="vbig">${matCount}</span>
+          <span class="vv">in pouch</span>
+        </div>
+        ${playHours !== null ? `<div class="vital"><span class="vk">Playtime</span><span class="vbig">${playHours}<small>h</small></span><span class="vv">total</span></div>` : ''}
       </div>
-      <div class="grid2" style="margin-top:12px;font-size:13.5px">
-        <dt>Position</dt><dd>${Math.round(pos.x || 0)}, ${Math.round(pos.y || 0)}, ${Math.round(pos.z || 0)}</dd>
-        <dt>Layer</dt><dd>${esc(st.layer || st.map_layer || 'Surface')}</dd>
+
+      <div class="status-meta">
+        <span>Position ${Math.round(pos.x || 0)}, ${Math.round(pos.y || 0)}, ${Math.round(pos.z || 0)}</span>
+        <span>${esc(layer)}</span>
       </div>
-    </section>
 
-    <section class="card">
-      <h3>Sages <span class="sub">${(st.sages || []).filter((s) => s.is_get).length} of 5</span></h3>
-      <div class="sage-grid">${sages || '<span class="dimmed">No sage data in this save.</span>'}</div>
-      <h3 style="margin-top:14px">Abilities</h3>
-      <div class="chiprow">${abilities}</div>
-    </section>
-
-    <section class="card wide">
       <h3>Equipped</h3>
       <div class="equip-grid">
         ${equipCard('Weapon', weapon, 'sword', weapon ? `${weapon.life || 0} / ${(weapon.weapon && weapon.weapon.max_life || 0) + (weapon.extra || 0)} durability` : '')}
@@ -473,14 +610,21 @@ function renderStatus() {
       </div>
     </section>
 
+    <section class="card status-side">
+      <h3>Sages <span class="sub">${(st.sages || []).filter((s) => s.is_get || s.is_follow || s.is_summon).length} of 5</span></h3>
+      <div class="sage-grid">${sages || '<span class="dimmed">No sage data in this save.</span>'}</div>
+      <h3 class="side-gap">Abilities</h3>
+      <div class="chiprow">${abilities}</div>
+    </section>
+
     <section class="card wide">
       <h3>Completion <span class="sub">${comp.totals.complete} of ${comp.totals.total} tracked</span></h3>
       <div class="quick-grid">
-        ${quick('Shrines', 'Shrines', 'shrines')}
-        ${quick('Lightroots', 'Lightroots', 'lightroots')}
-        ${quick('Koroks', 'Korok seeds', 'hidden_koroks')}
-        ${quick('Caves', 'Caves', 'caves')}
-        ${quick('Bubbuls', 'Bubbuls', 'bubbuls')}
+        ${quick('Shrines', 'shrines')}
+        ${quick('Lightroots', 'lightroots')}
+        ${quick('Koroks', 'hidden_koroks')}
+        ${quick('Caves', 'caves')}
+        ${quick('Bubbuls', 'bubbuls')}
         <button class="quick" data-page-go="progress"><span class="qk">Overall</span><span class="qv">${pct(comp.totals.complete, comp.totals.total)}<small>%</small></span><span class="qs">${comp.totals.total - comp.totals.complete - comp.totals.started} missing</span><span class="bar"><i style="width:${pct(comp.totals.complete, comp.totals.total)}%"></i></span></button>
         <button class="quick" data-page-go="compendium"><span class="qk">Compendium</span><span class="qv">${compDone}<small> / ${(d.compendium || []).length}</small></span><span class="qs">${fmtNum(compDone)} entries logged</span><span class="bar"><i style="width:${pct(compDone, (d.compendium || []).length)}%"></i></span></button>
       </div>
@@ -507,12 +651,14 @@ function invCell(it, selected) {
 
 function renderInventory() {
   const categories = dyn().inventory || [];
-  if (categories.length && !categories.some((c) => c.key === S.inv.cat)) S.inv.cat = categories[0].key;
-  $('#inv-cats').innerHTML = categories.map((c) =>
-    `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"><span>${esc(c.label)}</span><span class="c">${c.items.length}</span></button>`).join('');
-  const current = invCat(S.inv.cat);
+  if (S.inv.cat && !categories.some((c) => c.key === S.inv.cat)) S.inv.cat = '';
+  const allItems = categories.flatMap((c) => c.items);
+  const current = S.inv.cat ? invCat(S.inv.cat) : { key: '', label: 'All items', items: allItems };
+  $('#inv-cats').innerHTML = `<button class="fxchip" data-invcat="" aria-pressed="${S.inv.cat === ''}"><span>All</span><span class="c">${allItems.length}</span></button>` +
+    categories.map((c) =>
+      `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"><span>${esc(c.label)}</span><span class="c">${c.items.length}</span></button>`).join('');
   $('#inv-filter').value = S.inv.filter;
-  $('#inv-filter').placeholder = `Filter ${current.label.toLowerCase()}`;
+  $('#inv-filter').placeholder = S.inv.cat ? `Filter ${current.label.toLowerCase()}` : 'Filter inventory';
   const f = S.inv.filter.trim().toLowerCase();
   const items = current.items.filter((it) => {
     if (!f) return true;
@@ -963,11 +1109,10 @@ function mapItemState(index) {
   if (!c || !c.states || index >= c.states.length) return 0;
   return c.states[index];
 }
-function mapVisible(ignoreSearch) {
+function mapVisible() {
   const m = cat().map;
   if (!m) return [];
   const states = (dyn().completion && dyn().completion.states) || [];
-  const f = ignoreSearch ? '' : S.map.search.trim().toLowerCase();
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
@@ -976,10 +1121,28 @@ function mapVisible(ignoreSearch) {
     const st = states[i] || 0;
     if (S.map.found === 'missing' && st !== 0) continue;
     if (S.map.found === 'found' && st === 0) continue;
-    if (f && !it.name.toLowerCase().includes(f) &&
-        !((catMeta(it.cat).label || '').toLowerCase().includes(f))) continue;
     out.push({ item: it, index: i, state: st });
   }
+  return out;
+}
+function searchResults() {
+  const q = S.map.search.trim();
+  if (!q) return [];
+  const p = playerPos();
+  const states = (dyn().completion && dyn().completion.states) || [];
+  const out = [];
+  for (let i = 0; i < (cat().collectibles || []).length; i++) {
+    const it = cat().collectibles[i];
+    const st = states[i] || 0;
+    if (S.map.found === 'missing' && st !== 0) continue;
+    if (S.map.found === 'found' && st === 0) continue;
+    const score = Math.max(fuzzyScore(q, it.name),
+                           fuzzyScore(q, catMeta(it.cat).label) * 0.55);
+    if (score > 0) out.push({ item: it, index: i, state: st, score: score });
+  }
+  out.sort((a, b) => b.score - a.score ||
+    (p ? dist3(p, a.item) - dist3(p, b.item) : 0) ||
+    a.item.name.localeCompare(b.item.name));
   return out;
 }
 function mapLayerCounts(layer) {
@@ -1059,6 +1222,12 @@ function renderMapToolbar() {
   $('#map-found').innerHTML = found.map(([k, l]) =>
     `<button data-found="${k}" aria-pressed="${S.map.found === k}">${l}</button>`).join('');
   $('#map-search').value = S.map.search;
+  updateSearchClear();
+}
+function updateSearchClear() {
+  const btn = $('#map-search-clear');
+  const input = $('#map-search');
+  if (btn && input) btn.hidden = !input.value;
 }
 function renderMapCats() {
   const counts = mapLayerCounts(S.map.layer);
@@ -1084,12 +1253,13 @@ function renderMapDetail() {
     const meta = catMeta(item.cat);
     const p = playerPos();
     const d = p ? dist3(p, item) : null;
+    const deg = p ? bearing(p, item) : null;
     const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
     const iconFile = mapIconFile(item.cat, st);
     el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
       `<div class="k">Status</div><div class="v">${state}</div>` +
       `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
-      (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}</div>` : '') +
+      (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
       `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">Center</button>` +
       `<button class="btn" data-mprogress="${esc(item.cat)}">All ${esc(meta.label.toLowerCase())}</button></div>`;
     return;
@@ -1110,6 +1280,7 @@ function renderSourceSummary() {
   if (!entry) { el.innerHTML = ''; return; }
   const p = playerPos();
   const nearest = p && S.map.sources.length ? S.map.sources[0] : null;
+  const nearestDeg = nearest ? bearing(p, nearest) : null;
   const onLayer = S.map.sources.filter((x) => x.layer === S.map.layer).length;
   const icon = entry.icon ? `<img src="companion_data/icons/${encodeURIComponent(entry.icon)}" alt="">` : '';
   el.innerHTML = `<div class="md-head">${icon}<div><h2>${esc(entry.name)}</h2>` +
@@ -1117,7 +1288,7 @@ function renderSourceSummary() {
     `<div class="k">Sold</div><div class="v">${(entry.sold || []).length} ${(entry.sold || []).length === 1 ? 'shop' : 'shops'}</div>` +
     `<div class="k">Dropped</div><div class="v">${(entry.dropped || []).length} ${(entry.dropped || []).length === 1 ? 'enemy type' : 'enemy types'}</div>` +
     `<div class="k">Found</div><div class="v">${(entry.found || []).reduce((n, f) => n + (f.total || 0), 0)} spots</div>` +
-    (nearest && p ? `<div class="k">Nearest</div><div class="v">${fmtDist(dist3(p, nearest))}</div>` : '') +
+    (nearest && p ? `<div class="k">Nearest</div><div class="v">${fmtDist(dist3(p, nearest))}${dirIcon(nearestDeg)}<span class="dir-label">${cardinal(nearestDeg)}</span></div>` : '') +
     `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
 }
 function renderSourceDetail() {
@@ -1127,39 +1298,50 @@ function renderSourceDetail() {
   if (!entry || !point) { el.innerHTML = ''; return; }
   const p = playerPos();
   const d = p ? dist3(p, point) : null;
+  const deg = p ? bearing(p, point) : null;
   const icon = entry.icon ? `<img src="companion_data/icons/${encodeURIComponent(entry.icon)}" alt="">` : '';
   el.innerHTML = `<div class="md-head">${icon}<div><h2>${esc(entry.name)}</h2>` +
     `<div class="d-sub">${sourceKindLabel(point.kind)} · ${layerLabel(point.layer)}</div></div></div>` +
     `<div class="k">Where</div><div class="v">${esc(point.label)}</div>` +
     `<div class="k">Detail</div><div class="v">${esc(point.meta)}</div>` +
     `<div class="k">Position</div><div class="v">${Math.round(point.x)}, ${Math.round(point.y)}, ${Math.round(point.z)}</div>` +
-    (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}</div>` : '') +
+    (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
     `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
 }
 function renderNearby() {
   const el = $('#map-nearby');
+  const title = $('#map-near-title');
   const p = playerPos();
-  let items = mapVisible(false);
-  if (S.map.found === 'found') items = items.filter((x) => x.state > 0);
-  items.sort((a, b) => {
-    if (p) {
-      const da = dist3(p, a.item), db = dist3(p, b.item);
-      if (da !== db) return da - db;
-    }
-    return a.item.name.localeCompare(b.item.name);
-  });
-  items = items.slice(0, 40);
-  if (!items.length) { el.innerHTML = `<div class="empty">No markers match the current filters.</div>`; return; }
+  const searching = S.map.search.trim() !== '';
+  let items = searching ? searchResults() : mapVisible();
+  if (!searching) {
+    items.sort((a, b) => {
+      if (p) {
+        const da = dist3(p, a.item), db = dist3(p, b.item);
+        if (da !== db) return da - db;
+      }
+      return a.item.name.localeCompare(b.item.name);
+    });
+  }
+  const total = items.length;
+  items = items.slice(0, searching ? 60 : 40);
+  if (title) title.textContent = searching ? `Results (${total})` : 'Near Link';
+  if (!items.length) {
+    el.innerHTML = `<div class="empty">${searching ? 'No places match this search and filter.' : 'No markers match the current filters.'}</div>`;
+    return;
+  }
   el.innerHTML = items.map((x) => {
     const d = p ? dist3(p, x.item) : null;
+    const deg = p ? bearing(p, x.item) : null;
     const meta = catMeta(x.item.cat);
     const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
     const iconFile = mapIconFile(x.item.cat, x.state);
+    const layer = x.item.layer !== S.map.layer ? ` · ${layerLabel(x.item.layer)}` : '';
     return `<button data-midx="${x.index}">` +
       (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
       `<span><span>${esc(x.item.name)}</span>` +
-      `<span class="meta">${esc(meta.label)} · ${state}</span></span>` +
-      `<span class="dist">${d === null ? '' : fmtDist(d)}</span></button>`;
+      `<span class="meta">${esc(meta.label)} · ${state}${esc(layer)}</span></span>` +
+      `<span class="dist">${dirIcon(deg)}${d === null ? '' : ` ${fmtDist(d)}`}</span></button>`;
   }).join('');
 }
 function fitMap() {
@@ -1545,7 +1727,27 @@ function mapHitTest(clientX, clientY) {
     S.map.sourceSel = null;
     S.map.sel = best.item.id;
     renderMapDetail(); renderNearby(); drawMap();
+    return;
   }
+  if (S.map.sel || S.map.sourceSel !== null) {
+    S.map.sel = null;
+    S.map.sourceSel = null;
+    renderMapDetail(); renderNearby(); drawMap();
+  }
+}
+
+function updateMapCoords(clientX, clientY) {
+  const el = $('#map-coords');
+  const vp = $('#map-viewport');
+  const m = cat().map;
+  if (!el || !vp || !m) return;
+  const rect = vp.getBoundingClientRect();
+  const px = (clientX - rect.left - S.map.tx) / S.map.zoom;
+  const py = (clientY - rect.top - S.map.ty) / S.map.zoom;
+  const x = m.world.x_min + (px / m.width) * (m.world.x_max - m.world.x_min);
+  const z = m.world.z_min + (py / m.height) * (m.world.z_max - m.world.z_min);
+  el.hidden = false;
+  el.textContent = `${layerLabel(S.map.layer)} · X ${Math.round(x)} · Z ${Math.round(z)}`;
 }
 
 /* ------------------------------------------------------------------ progress */
@@ -1558,24 +1760,31 @@ function renderProgress() {
   const totals = comp.totals;
   const current = S.progress.cat;
   if (current === 'overview') {
+    const overall = pct(totals.complete, totals.total);
     el.innerHTML = `<div><h2>Completion</h2><div class="sub">${totals.complete} complete · ${totals.started} started · ${totals.total - totals.complete - totals.started} missing</div></div>` +
-      `<div class="big">${pct(totals.complete, totals.total)}<small>%</small></div>`;
+      `<div class="big ring" style="--p:${overall}"><span>${overall}<small>%</small></span></div>`;
     $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="true"><span>Overview</span><span class="c">${totals.total}</span></button>` +
       cats.map((c) => `<button class="fxchip" data-pcat="${c.key}" aria-pressed="false"><span>${esc(c.label)}</span><span class="c">${c.complete}/${c.total}</span></button>`).join('');
     $('#progress-mode').hidden = true;
     $('#progress-filter').hidden = true;
     $('#progress-list').innerHTML = `<div class="progress-grid">` + cats.map((c) => {
       const p = pct(c.complete, c.total);
-      return `<button class="pcard" data-pcat="${c.key}"><div class="top"><span class="name">${esc(c.label)}</span><span class="num">${c.complete}/${c.total}</span></div>` +
+      const meta = catMeta(c.key);
+      const iconFile = (cat().map_icons || {})[c.key];
+      const ico = iconFile ? `<img class="pcico" src="companion_data/${encodeURIComponent(iconFile)}" alt="">` : '';
+      return `<button class="pcard" data-pcat="${c.key}" style="--c:${meta.color}"><div class="top"><span class="name">${ico}${esc(c.label)}</span><span class="num">${c.complete}/${c.total}</span></div>` +
         `<div class="bar"><i style="width:${p}%"></i></div><div class="foot"><span>${c.missing} missing</span><span>${c.started ? `${c.started} started` : `${p}%`}</span></div></button>`;
     }).join('') + `</div>`;
     return;
   }
   const c = cats.find((x) => x.key === current);
   if (!c) { S.progress.cat = 'overview'; renderProgress(); return; }
-  el.innerHTML = `<div><button class="crumb" data-pcat="overview">← Overview</button><h2 style="margin-top:8px">${esc(c.label)}</h2>` +
+  const catIcon = (cat().map_icons || {})[c.key];
+  const catIconHtml = catIcon ? `<img class="phead-ico" src="companion_data/${encodeURIComponent(catIcon)}" alt="">` : '';
+  const catPct = pct(c.complete, c.total);
+  el.innerHTML = `<div><button class="crumb" data-pcat="overview">← Overview</button><h2 style="margin-top:8px">${catIconHtml}${esc(c.label)}</h2>` +
     `<div class="sub">${c.complete} complete · ${c.started} started · ${c.missing} missing</div></div>` +
-    `<div class="big">${pct(c.complete, c.total)}<small>%</small></div>`;
+    `<div class="big ring" style="--p:${catPct}"><span>${catPct}<small>%</small></span></div>`;
   $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="false"><span>Overview</span><span class="c">${totals.total}</span></button>` +
     cats.map((x) => `<button class="fxchip" data-pcat="${x.key}" aria-pressed="${x.key === current}"><span>${esc(x.label)}</span><span class="c">${x.complete}/${x.total}</span></button>`).join('');
   $('#progress-mode').hidden = false;
@@ -1777,7 +1986,22 @@ function attachStatic() {
   $('#armor-filter').addEventListener('input', (e) => { S.armor.filter = e.target.value; renderArmor(); });
   $('#armor-set').addEventListener('change', (e) => { S.armor.set = e.target.value; renderArmor(); });
   $('#armor-owned').addEventListener('click', () => { S.armor.owned = !S.armor.owned; renderArmor(); });
-  $('#map-search').addEventListener('input', (e) => { S.map.search = e.target.value; renderMapCats(); renderNearby(); drawMap(); });
+  $('#map-search').addEventListener('input', (e) => {
+    S.map.search = e.target.value;
+    updateSearchClear();
+    renderNearby();
+    drawMap();
+  });
+  const clearSearch = $('#map-search-clear');
+  if (clearSearch) clearSearch.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    S.map.search = '';
+    $('#map-search').value = '';
+    updateSearchClear();
+    renderNearby();
+    drawMap();
+  });
   $('#progress-filter').addEventListener('input', (e) => { S.progress.filter = e.target.value; renderProgress(); });
   $('#comp-filter').addEventListener('input', (e) => { S.comp.filter = e.target.value; renderCompendium(); });
   $('#cook-filter').addEventListener('input', (e) => { S.cook.filter = e.target.value; renderCooking(); });
@@ -1802,12 +2026,17 @@ function attachStatic() {
     try { vp.setPointerCapture(e.pointerId); } catch (err) {}
   });
   vp.addEventListener('pointermove', (e) => {
+    updateMapCoords(e.clientX, e.clientY);
     const d = S.map.drag;
     if (!d) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     S.map.tx = d.tx + dx; S.map.ty = d.ty + dy;
     applyMap();
+  });
+  vp.addEventListener('pointerleave', () => {
+    const el = $('#map-coords');
+    if (el) el.hidden = true;
   });
   const endDrag = (e) => {
     const d = S.map.drag;
@@ -1827,6 +2056,7 @@ function attachStatic() {
       vp.classList.add('grabbing');
     });
     window.addEventListener('mousemove', (e) => {
+      if (vp.contains(e.target)) updateMapCoords(e.clientX, e.clientY);
       const d = S.map.drag;
       if (!d) return;
       const dx = e.clientX - d.x, dy = e.clientY - d.y;

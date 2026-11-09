@@ -95,6 +95,7 @@
             <label class="filter map-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
               <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place">
+              <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
             </label>
             <div class="map-zoom">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>
@@ -112,11 +113,12 @@
               <img id="minimap-img" alt="" draggable="false">
               <canvas id="minimap-canvas"></canvas>
             </div>
+            <div class="map-coords" id="map-coords" hidden></div>
           </div>
         </div>
         <aside class="map-side">
           <div id="map-detail" class="map-detail"></div>
-          <h3 class="label">Near Link</h3>
+          <h3 class="label" id="map-near-title">Near Link</h3>
           <div class="nearby" id="map-nearby"></div>
         </aside>
       </div>

@@ -140,6 +140,10 @@ counts, and world spawns, then can pin those places on the map. Shops come from
 the actor packs' ShopParam data, drops from the enemy DropTable and horn mapping
 data, and spawns from the Banc map placements, all from your own game files.
 
+The status page combines hearts, stamina wheels, energy cells, sages, special
+powers, and equipped gear, using the game's sage portraits and ability icons.
+The inventory opens on All, and the armor page opens with Owned only.
+
 Each tab remembers its filters and view choices across restarts. Companion
 shortcuts: `/` focuses the active filter, `1` to `7` switch sections, `r`
 refreshes, and Esc clears a filter or closes settings. The save slot is chosen

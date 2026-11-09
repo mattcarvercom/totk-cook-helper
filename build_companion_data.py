@@ -47,6 +47,15 @@ SLOTS = ('Head', 'Upper', 'Lower')
 SLOT_ORDER = {'Head': 0, 'Upper': 1, 'Lower': 2}
 SLOT_WORD = {'Head': 'Head', 'Upper': 'Body', 'Lower': 'Legs'}
 
+# Character-directory portraits for the five sages on the status page.
+SAGE_ICON_SOURCES = {
+    'wind': 'Npc_HighMountain001_Sage_Icon',
+    'fire': 'Npc_Goron020_Sage_Icon',
+    'water': 'Npc_ZoraB001_Sage_Icon',
+    'electric': 'Npc_oasis003_Sage_Icon',
+    'soul': 'Npc_RaumiGolem_Sage_Icon',
+}
+
 # The raw SeriesName values are internal labels. These are the set names used
 # by the armor screen and the item names.
 SET_DISPLAY_NAMES = {
@@ -404,6 +413,16 @@ class Builder:
         if not src:
             return None
         return self._save_icon(key, src, size=PB_ICON_SIZE, quality=86)
+
+    def extract_sage_icons(self):
+        out = {}
+        for key, name in SAGE_ICON_SOURCES.items():
+            src = 'UI/Tex/CharaDirectory/%s.bntx.zs' % name
+            icon = self._save_icon('sage_' + key, src, size=192, quality=90)
+            if icon:
+                out[key] = icon
+        self.catalog['sage_icons'] = out
+        log('sage icons: %d exported' % len(out))
 
     # --- rsdb -----------------------------------------------------------------
 
@@ -1202,6 +1221,7 @@ class Builder:
         self.build_armor_catalog()
         self.collect_compendium()
         self.build_actors()
+        self.extract_sage_icons()
         self.build_collectibles()
         self.build_material_sources()
         if not self.skip_map:
