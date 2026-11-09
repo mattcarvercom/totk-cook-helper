@@ -284,6 +284,8 @@ function renderNav() {
 }
 
 const SET_BONUS_LEVEL = 2;
+const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
+                          'sages_wills', 'schema_stones'];
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -354,6 +356,27 @@ function saveUiStateSoon() {
   uiSaveTimer = setTimeout(saveUiState, 350);
 }
 
+function resetFilters() {
+  S.inv = { cat: '', filter: '', sel: null };
+  S.armor = { slot: '', owned: true, set: '', filter: '', sel: null };
+  S.map.cats = new Set(DEFAULT_MAP_CATS);
+  S.map.found = 'found';
+  S.map.search = '';
+  S.map.reveal = false;
+  S.map.sel = null;
+  S.map.sourceSel = null;
+  S.map.sourceMat = null;
+  S.map.sources = [];
+  S.progress = { cat: 'overview', mode: 'found', filter: '' };
+  S.comp = { group: '', state: 'TakePhoto', filter: '', sel: null };
+  S.cook = { filter: '', fx: '', sort: 'hearts', sel: null };
+  saveUiState();
+  renderPage(S.page, true);
+  if (S.page === 'map') {
+    renderMapToolbar(); renderMapCats(); renderMapDetail(); renderNearby(); drawMap();
+  }
+}
+
 async function start() {
   const boot = await call('bootstrap');
   if (!boot || !boot.catalog) { setTimeout(start, 250); return; }
@@ -368,9 +391,7 @@ async function start() {
   const savedCats = S.settings.ui_state && S.settings.ui_state.map &&
                     Array.isArray(S.settings.ui_state.map.cats);
   if (!savedCats) {
-    const defaults = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
-                      'sages_wills', 'schema_stones'];
-    for (const c of defaults) S.map.cats.add(c);
+    for (const c of DEFAULT_MAP_CATS) S.map.cats.add(c);
   }
   loadMapIcons();
   renderNav();
@@ -2178,7 +2199,8 @@ function renderSettings() {
     `<div class="row"><span class="t">Refresh interval</span><span class="s" style="grid-column:auto;color:var(--text)">${(dyn().save && dyn().save.poll_s) || 15}s</span><span class="s">The window checks for a newer save on this interval. Use Refresh now for an immediate check.</span></div>` +
     `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild with <span class="kbd">build_companion_data.py</span> after a game update.</span></div>` +
     `<div class="row"><span class="t">Shortcuts</span><span class="s"><span class="kbd">/</span> filter · <span class="kbd">r</span> refresh · <span class="kbd">1</span>-<span class="kbd">7</span> sections · <span class="kbd">Esc</span> clear</span></div>` +
-    `<div class="actions"><button class="btn" data-act="refresh">Refresh now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
+    `<div class="actions"><button class="btn" data-act="reset-filters">Reset filters</button>` +
+    `<button class="btn" data-act="refresh">Refresh now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
   renderSaves();
 }
 
@@ -2418,6 +2440,7 @@ document.addEventListener('click', (e) => {
     renderSettings();
     return;
   }
+  if (t.dataset.act === 'reset-filters') { resetFilters(); openSettings(false); return; }
   if (t.dataset.act === 'refresh') { call('refresh'); return; }
   if (t.dataset.act === 'close-settings') { openSettings(false); return; }
 });

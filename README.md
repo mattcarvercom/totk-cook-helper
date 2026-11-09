@@ -152,10 +152,11 @@ item in their details. New installs start with spoiler-free filters: Found map
 markers, photographed compendium entries, found progress entries, and the map
 limited to revealed areas.
 
-Each tab remembers its filters and view choices across restarts. Companion
-shortcuts: `/` focuses the active filter, `1` to `7` switch sections, `r`
-refreshes, and Esc clears a filter or closes settings. The save slot is chosen
-in Settings; Auto follows the newest save.
+Each tab remembers its filters and view choices across restarts. **Reset
+filters** in Settings restores the spoiler-free defaults. Companion shortcuts:
+`/` focuses the active filter, `1` to `7` switch sections, `r` refreshes, and
+Esc clears a filter or closes settings. The save slot is chosen in Settings;
+Auto follows the newest save.
 
 ## Cook Helper controls
 
