@@ -15,6 +15,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import threading
@@ -36,6 +37,7 @@ DEFAULTS = {
     'start_hidden': False,
     'tab': 'status',
     'save_path': '',
+    'poll_s': POLL_S,
     'ui_state': {},
 }
 
@@ -281,8 +283,15 @@ class Api:
         self._app.set_setting(key, value)
 
     def refresh(self):
-        self._app.poll_once(force=True)
+        self._app.poll_once()
         self._app.push()
+
+    def rebuild(self):
+        return self._app.start_rebuild()
+
+    def ack_rebuild(self):
+        self._app.ack_rebuild()
+        return True
 
     def saves(self):
         return self._app.list_saves()
@@ -316,7 +325,10 @@ class App:
         self.checking = False
         self._all_recipes = None
         self._all_recipes_for = None
-        self.poll_s = max(MIN_POLL_S, float(poll_s))
+        self.poll_s = max(MIN_POLL_S, float(self.s.get('poll_s') or poll_s))
+        self.s['poll_s'] = self.poll_s
+        self.rebuild_state = {'running': False, 'done': False, 'error': None,
+                              'message': '', 'started': 0}
         self.next_scan = time.time() + self.poll_s
         self.closing = False
         self.lock = threading.Lock()
@@ -377,6 +389,13 @@ class App:
             self.s[key] = value if isinstance(value, dict) else {}
             save_settings(self.s)
             return
+        if key == 'poll_s':
+            try:
+                value = max(MIN_POLL_S, min(300.0, float(value)))
+            except (TypeError, ValueError):
+                return
+            self.poll_s = value
+            self.next_scan = time.time() + value
         self.s[key] = value
         if key == 'on_top' and self.window:
             try:
@@ -401,6 +420,58 @@ class App:
         self._all_recipes = build_all_recipes(inv, self.cook, self.catalog)
         self._all_recipes_for = key
         return self._all_recipes
+
+    def ack_rebuild(self):
+        if not self.rebuild_state['running']:
+            self.rebuild_state = {'running': False, 'done': False, 'error': None,
+                                  'message': '', 'started': 0}
+            self.push()
+
+    def start_rebuild(self):
+        if self.rebuild_state['running']:
+            return False
+        self.rebuild_state = {'running': True, 'done': False, 'error': None,
+                              'message': 'Rebuilding data. This can take several minutes.',
+                              'started': int(time.time())}
+        self.push()
+        threading.Thread(target=self._rebuild_job, daemon=True).start()
+        return True
+
+    def _rebuild_job(self):
+        log_path = os.path.join(self.game, 'logs', 'companion-rebuild.log')
+        try:
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            lod = str((self.catalog.get('meta') or {}).get('lod') or 1)
+            cmd = [sys.executable, os.path.join(HERE, 'build_companion_data.py'),
+                   self.game, '--lod', lod]
+            proc = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+            with open(log_path, 'w', encoding='utf-8') as f:
+                f.write(proc.stdout or '')
+                if proc.stderr:
+                    f.write('\n' + proc.stderr)
+            if proc.returncode != 0:
+                tail = (proc.stderr or proc.stdout or '').strip().splitlines()[-3:]
+                self.rebuild_state = {'running': False, 'done': False, 'error': 'Build failed.',
+                                      'message': ' '.join(tail)[-400:], 'started': self.rebuild_state['started']}
+                self.push()
+                return
+            self.catalog = core.load_catalog(os.path.join(DATA, 'catalog.json'))
+            self.cook = cc.Cook(os.path.join(DATA, 'cookdata.json'))
+            self._all_recipes = None
+            self._all_recipes_for = None
+            self.bootstrap['catalog'] = self.catalog
+            if self.save:
+                payload = self.build(self.save)
+                self.data_version += 1
+                payload['data_version'] = self.data_version
+                self.payload = payload
+            self.rebuild_state = {'running': False, 'done': True, 'error': None,
+                                  'message': 'Data rebuilt.', 'started': self.rebuild_state['started']}
+            self.push()
+        except Exception as e:
+            self.rebuild_state = {'running': False, 'done': False, 'error': e.__class__.__name__,
+                                  'message': str(e)[:400], 'started': self.rebuild_state['started']}
+            self.push()
 
     # --- save selection -------------------------------------------------------
 
@@ -488,7 +559,8 @@ class App:
     def save_status(self):
         return {'slot': os.path.basename(os.path.dirname(self.save_path)) if self.save_path else None,
                 'mtime': self.save_mtime, 'error': self.error, 'live': 'off',
-                'checking': self.checking, 'next_scan': self.next_scan, 'poll_s': self.poll_s}
+                'checking': self.checking, 'next_scan': self.next_scan, 'poll_s': self.poll_s,
+                'rebuild': dict(self.rebuild_state)}
 
     def push_status(self):
         with self.lock:

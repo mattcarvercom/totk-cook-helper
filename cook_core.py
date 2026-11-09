@@ -39,6 +39,14 @@ TAG_LABELS = {
     'CookGolem': 'Any construct part', 'CookOre': 'Any ore',
     'CookForeign': 'Any fuse material',
 }
+# Potency thresholds used by the game for effects that have levels.
+LEVEL_THRESHOLDS = {
+    'ResistHot': [1, 6], 'ResistCold': [1, 6], 'ResistElectric': [1, 4, 6],
+    'AllSpeed': [1, 5, 7], 'AttackUp': [1, 5, 7], 'QuietnessUp': [1, 6, 9],
+    'ResistBurn': [1, 7], 'LightEmission': [1, 5, 7], 'NotSlippy': [1, 5, 7],
+    'SwimSpeedUp': [1, 6, 9], 'AttackUpCold': [1, 6, 9], 'AttackUpHot': [1, 6, 9],
+    'AttackUpThunderstorm': [1, 6, 9], 'MiasmaGuard': [1, 2, 3],
+}
 
 
 def murmur3(key, seed=0):
@@ -159,7 +167,12 @@ class Cook:
         effect = effs.pop() if len(effs) == 1 else None
         rate = self.sys.get('LifeRecoverRate', 2.0)
         hp = hp * rate + (recipe or {}).get('bonus', {}).get('Heart', 0)
-        level = sum(m.get('level', 0) for m in mats if m.get('effect') == effect) if effect else 0
+        potency = sum(m.get('level', 0) for m in mats if m.get('effect') == effect) if effect else 0
+        thresholds = LEVEL_THRESHOLDS.get(effect)
+        if thresholds:
+            level = sum(1 for t in thresholds if potency >= t)
+        else:
+            level = min(potency, int(self.effects.get(effect, {}).get('MaxLv', potency) or potency))
         secs = 0
         if effect:
             base = self.effects.get(effect, {}).get('BaseTime', 0)

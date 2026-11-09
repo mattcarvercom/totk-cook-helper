@@ -23,7 +23,7 @@
     </div>
     <nav class="mainnav" id="nav" role="tablist" aria-label="Sections"></nav>
     <div class="winbtns">
-      <button class="wb" id="btn-refresh" title="Refresh now" aria-label="Refresh now">
+      <button class="wb" id="btn-refresh" title="Check save now" aria-label="Check save now">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5V10H14"/></svg>
       </button>
       <button class="wb" id="btn-settings" title="Settings" aria-label="Settings" aria-pressed="false">
@@ -52,6 +52,7 @@
               <kbd>/</kbd>
             </label>
             <div class="pouch-note" id="inv-pouch" hidden></div>
+            <div class="armor-hint" id="inv-armor-hint" hidden></div>
           </div>
           <div class="gridwrap"><div class="grid" id="inv-grid"></div></div>
         </div>
@@ -104,6 +105,7 @@
           <div class="map-viewport" id="map-viewport">
             <img id="map-img" alt="" draggable="false">
             <canvas id="map-canvas"></canvas>
+            <div class="player-ping" id="player-ping" hidden></div>
             <div class="map-loading" id="map-loading">Loading map…</div>
             <div class="map-zoom">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>

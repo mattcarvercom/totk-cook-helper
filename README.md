@@ -140,12 +140,13 @@ circles. Travel
 Medallions have their own toggle in the left pane, appear only on their layer,
 and use the game's medallion art without a background plate. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
-current layer, with a point and distance summary. The map cursor shows X, Y
-and Z in Purah Pad order, using the game's terrain height grids for Z. Marker
-details and **Near Link** or **Results** are on the right, with game-style
-X/Y/Z coordinates and a direction arrow from Link. Empty detail or Nearby
-panels are hidden instead of leaving a blank box. Map controls use a small
-vendored Material Symbols set so the app never fetches icons from a CDN.
+current layer, with a point and distance summary. Link's map marker has a
+continuous expanding sonar ring. The map cursor shows X, Y and Z in Purah Pad
+order, using the game's terrain height grids for Z. Marker details and
+**Near Link** or **Results** are on the right, with game-style X/Y/Z
+coordinates and a direction arrow from Link. Empty detail or Nearby panels are
+hidden instead of leaving a blank box. Map controls use a small vendored
+Material Symbols set so the app never fetches icons from a CDN.
 Completion lists every tracked category and can show only missing entries.
 Armor shows a Ready or Need badge on the grid. The detail puts the item
 description first, then the piece effect and a compact set panel with piece
@@ -166,26 +167,34 @@ and Hero's Path points from the save. Key item chips show Korok Seeds, Bubbul
 Gems, and Light of Blessing. A pouch summary shows each bag's used and maximum
 slots plus the next Hestu price for weapons, bows, and shields. Equipment,
 material, attack, defense, pouch, and completion cards jump to the matching
-inventory, armor, or progress view. The inventory
-opens on All, and category chips show their slot cap, such as Weapons 12/12 or
-Materials 137/255. Choosing an equipment category also shows the next Korok
-Seed cost, and the armor page shows owned pieces against its 150 slots. Armor
-opens with Owned only; armor with elemental or gloom resistance shows the
-matching icon in its top-left corner. Weapons and shields show a fusion badge
-and the fused item in their details, including object fusions such as Rock.
+inventory, armor, or progress view. Armor lives in its own tab rather than as
+an Inventory category; the Inventory chips still include an Armor link, and an
+Inventory search that matches armor offers to continue in the Armor tab.
+Inventory opens on All, and category chips show their slot cap, such as
+Weapons 12/12 or Materials 137/255. Choosing an equipment category also shows
+the next Korok Seed cost, and the armor page shows owned pieces against its 150
+slots. Armor opens with Owned only; armor with elemental or gloom resistance
+shows the matching icon in its top-left corner. Weapons and shields show a
+fusion badge and the fused item in their details, including object fusions such
+as Rock. Weapons, bows, and shields with 3 or less durability pulse red.
 Cooking starts with dishes that the current pouch can make; **All recipes**
 adds the full recipe table with required ingredient slots and marks entries the
 pouch cannot cook yet. The dish detail shows the recovered portion of a stamina
-wheel for Stamina Recovery recipes. New installs start with spoiler-free
+wheel for Stamina Recovery recipes and a level-specific amount for effects such
+as Stealth Up or Attack Up. When worn armor has the same effect, it also shows
+the combined level with current gear. New installs start with spoiler-free
 filters: Found map markers, photographed compendium entries, found progress
 entries, and the map limited to revealed
 areas.
 
 Each tab remembers its filters and view choices across restarts. **Reset
-filters** in Settings restores the spoiler-free defaults. Companion shortcuts:
-`/` focuses the active filter, `1` to `7` switch sections, `r` refreshes, and
-Esc clears a filter or closes settings. The save slot is chosen in Settings;
-Auto follows the newest save.
+filters** in Settings restores the spoiler-free defaults. Settings also chooses
+the save slot and refresh interval, and includes **Rebuild now** to rebuild
+icons, maps, and item data from the game files without running a script by hand.
+**Check save now** only re-reads the save when its file time changed.
+Companion shortcuts: `/` focuses the active filter, `1` to `7` switch sections,
+`r` checks the save, and Esc clears a filter or closes settings. Auto follows
+the newest save.
 
 ## Cook Helper controls
 

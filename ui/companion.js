@@ -11,7 +11,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const S = {
   catalog: null, d: null, version: -1, dataVersion: -1, page: 'status',
-  settings: {}, booted: false, matCounts: {}, saves: [], selectedSave: '',
+  settings: {}, booted: false, matCounts: {}, saves: [], selectedSave: '', rebuildStarted: false,
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
@@ -131,6 +131,45 @@ const EFFECT_DESC = {
 };
 function effectDesc(effect) {
   return EFFECT_DESC[(effect && effect.type) || effect] || '';
+}
+const EFFECT_AMOUNT = {
+  AttackUp: ['', '+20% attack', '+30% attack', '+50% attack'],
+  DefenseUp: ['', '+4 defense', '+12 defense', '+24 defense'],
+  QuietnessUp: ['', '20% less sound', '40% less sound', '70% less sound'],
+  AllSpeed: ['', '10% faster', '20% faster', '30% faster'],
+  ClimbSpeedUp: ['', '20% faster climbing', '30% faster climbing', '40% faster climbing'],
+  SwimSpeedUp: ['', '30% faster swimming', '60% faster swimming', '2x swim speed'],
+  DivingMobilityUp: ['', '1.5x skydive mobility', '2x skydive mobility', '2.5x skydive mobility'],
+  MiasmaGuard: ['', '1 gloom heart', '2 gloom hearts', '3 gloom hearts'],
+  MiasmaDefenseUp: ['', '4 gloom hearts', '4 gloom hearts', '4 gloom hearts'],
+  ResistCold: ['', 'endure -10 C', 'endure any cold', 'endure any cold'],
+  ResistHot: ['', 'endure 50 C', 'endure any heat', 'endure any heat'],
+  ResistBurn: ['', 'endure some scorching heat', 'endure any scorching heat', 'endure any scorching heat'],
+  ResistElectric: ['', '1/3 less shock damage', '2/3 less shock damage', 'no shock damage'],
+  LightEmission: ['', 'glow 10', 'glow 30', 'glow 60'],
+  NotSlippy: ['', 'slip every 6 seconds', 'slip every 8 seconds', 'slip every 10 seconds'],
+  AttackUpBone: ['', '80% more bone weapon attack', '80% more bone weapon attack', '80% more bone weapon attack'],
+  SwordBeamUp: ['', '50% more beam damage', '50% more beam damage', '50% more beam damage'],
+  DecreaseSwimStamina: ['', '75% less swim dash stamina', '75% less swim dash stamina', '75% less swim dash stamina'],
+  DecreaseWallJumpStamina: ['', '50% less climbing jump stamina', '50% less climbing jump stamina', '50% less climbing jump stamina'],
+  DecreaseChargeAttackStamina: ['', '50% less charge attack stamina', '50% less charge attack stamina', '50% less charge attack stamina'],
+  ChargePowerUpCold: ['', 'charge twice as fast in cold', 'charge twice as fast in cold', 'charge twice as fast in cold'],
+  ChargePowerUpHot: ['', 'charge twice as fast in heat', 'charge twice as fast in heat', 'charge twice as fast in heat'],
+  ChargePowerUpThunderstorm: ['', 'charge twice as fast in storms', 'charge twice as fast in storms', 'charge twice as fast in storms'],
+  ZonauEnergyHealUp: ['', '50% faster energy recharge', '50% faster energy recharge', '50% faster energy recharge'],
+  NightMoveSpeedUp: ['', '20% faster at night', '20% faster at night', '20% faster at night'],
+  NoBurning: ['', 'fireproof', 'fireproof', 'fireproof'],
+  ResistFreeze: ['', 'unfreezable', 'unfreezable', 'unfreezable'],
+  NoFallDamage: ['', 'no fall damage', 'no fall damage', 'no fall damage'],
+  ResitLightning: ['', 'no lightning damage', 'no lightning damage', 'no lightning damage'],
+  ClimbWaterfall: ['', 'swim up waterfalls', 'swim up waterfalls', 'swim up waterfalls'],
+  SpinAttack: ['', 'spin attack while swimming', 'spin attack while swimming', 'spin attack while swimming'],
+  EnableUseSwordBeam: ['', 'beam without full hearts', 'beam without full hearts', 'beam without full hearts'],
+};
+function effectAmount(type, level) {
+  const map = EFFECT_AMOUNT[type];
+  if (!map) return '';
+  return map[clamp(Math.round(Number(level) || 1), 0, 3)] || '';
 }
 
 const MARKS = {
@@ -352,7 +391,7 @@ function invCat(key) {
 function navBadge(key) {
   const d = dyn();
   if (!d.inventory) return '';
-  if (key === 'inventory') return d.inventory.reduce((n, c) => n + (c.key === 'arrows' ? 0 : c.items.length), 0);
+  if (key === 'inventory') return d.inventory.reduce((n, c) => n + (c.key === 'arrows' || c.key === 'armor' ? 0 : c.items.length), 0);
   if (key === 'armor') return invCat('armor').items.length;
   if (key === 'compendium') return (d.compendium || []).filter((x) => x.state !== 'Unopened').length;
   if (key === 'cook') return (d.cooking && d.cooking.dishes ? d.cooking.dishes.length : 0);
@@ -384,11 +423,13 @@ function renderNav() {
 }
 
 const SET_BONUS_LEVEL = 2;
+const EFFECT_MAX_LEVEL = { ResistCold: 2, ResistHot: 2, ResistBurn: 2, ResistElectric: 3,
+                           MiasmaGuard: 3, LightEmission: 3, NotSlippy: 3, SwimSpeedUp: 3 };
 const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: 'armor', materials: 'material',
                      food: 'meal', zonai: 'device', keyitems: 'key item' };
 const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
                           'sages_wills', 'schema_stones'];
-const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
+const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
 const PROGRESS_MODES = ['all', 'missing', 'found'];
@@ -537,6 +578,13 @@ async function poll(first) {
       } else {
         renderStatusLine();
       }
+      renderRebuildStatus();
+      const rb = p.save && p.save.rebuild;
+      if (rb && rb.done && S.rebuildStarted) {
+        S.rebuildStarted = false;
+        call('ack_rebuild');
+        setTimeout(() => window.location.reload(), 700);
+      }
     }
   } catch (e) { /* window is closing */ }
   setTimeout(poll, 550);
@@ -614,6 +662,27 @@ function equipCard(label, item, iconName, meta) {
 function findEquip(key, actor) {
   for (const it of invCat(key).items) if (it.actor === actor) return it;
   return null;
+}
+
+function gearEffectLevels() {
+  const eq = (dyn().status && dyn().status.equipped) || {};
+  const pieces = ['armor_head', 'armor_upper', 'armor_lower']
+    .map((k) => findEquip('armor', eq[k] && eq[k].actor)).filter(Boolean);
+  const out = {};
+  const add = (type, level, capKey) => {
+    const cap = EFFECT_MAX_LEVEL[capKey || type] || 3;
+    out[type] = Math.min(cap, (out[type] || 0) + Math.max(1, level || 1));
+  };
+  for (const piece of pieces) {
+    for (const fx of piece.effect_info || []) add(fx.type, fx.level);
+  }
+  if (pieces.length === 3) {
+    const setKey = pieces[0].set_key;
+    if (setKey && pieces.every((x) => x.set_key === setKey && (x.rank || 1) >= SET_BONUS_LEVEL)) {
+      for (const fx of pieces[0].set_bonus || []) add(fx.type, fx.level);
+    }
+  }
+  return out;
 }
 
 function staminaWheel(fill) {
@@ -696,12 +765,11 @@ function renderStatus() {
   const legs = findEquip('armor', eq.armor_lower && eq.armor_lower.actor);
   const wornArmor = [head, body, legs].filter(Boolean);
   const effectMap = new Map();
-  const effectCap = { ResistCold: 2, ResistHot: 2, ResistBurn: 2, ResistElectric: 3, MiasmaGuard: 3 };
   for (const piece of wornArmor) {
     for (const fx of piece.effect_info || []) {
       const cur = effectMap.get(fx.type);
       const level = Math.max(1, fx.level || 1);
-      const cap = effectCap[fx.type] || 3;
+      const cap = EFFECT_MAX_LEVEL[fx.type] || 3;
       if (cur) cur.level = Math.min(cap, (cur.level || 1) + level);
       else effectMap.set(fx.type, { ...fx, level });
     }
@@ -896,15 +964,17 @@ function invCell(it, selected) {
       ? `<img class="fusebadge" src="companion_data/icons/${encodeURIComponent(it.fused_icon)}" alt="" title="Fused with ${esc(label)}">`
       : `<span class="fusebadge glyph" title="Fused with ${esc(label)}">+</span>`;
   }
-  return `<button class="cell${dim}${dur ? ' has-dur' : ''}" role="option" aria-selected="${selected}" data-invkey="${esc(key)}" data-actor="${esc(it.actor)}">` +
+  const lowDur = it.life !== undefined && it.life !== null && it.life >= 0 && it.life <= 3;
+  return `<button class="cell${dim}${dur ? ' has-dur' : ''}${lowDur ? ' lowdur' : ''}" role="option" aria-selected="${selected}" data-invkey="${esc(key)}" data-actor="${esc(it.actor)}">` +
     `${it.equipped ? '<span class="eq"></span>' : ''}${badge}${fused}${art(it)}${dur}<span class="nm">${esc(it.name)}</span></button>`;
 }
 
 function renderInventory() {
-  const categories = dyn().inventory || [];
-  if (S.inv.cat && !categories.some((c) => c.key === S.inv.cat)) S.inv.cat = '';
+  const categories = (dyn().inventory || []).filter((c) => c.key !== 'armor');
+  if (S.inv.cat === 'armor' || (S.inv.cat && !categories.some((c) => c.key === S.inv.cat))) S.inv.cat = '';
   const allItems = categories.flatMap((c) => c.items);
   const current = S.inv.cat ? invCat(S.inv.cat) : { key: '', label: 'All items', items: allItems };
+  const armorCount = invCat('armor').items.length;
   $('#inv-cats').innerHTML = `<button class="fxchip" data-invcat="" aria-pressed="${S.inv.cat === ''}"><span>All</span><span class="c">${allItems.length}</span></button>` +
     categories.map((c) => {
       const cap = c.cap ? `/${c.cap}` : '';
@@ -912,7 +982,8 @@ function renderInventory() {
         : c.cap ? `${c.used} of ${c.cap} slots.` : '';
       return `<button class="fxchip" data-invcat="${c.key}" aria-pressed="${S.inv.cat === c.key}"${title ? ` title="${esc(title)}"` : ''}>` +
         `<span>${esc(c.label)}</span><span class="c">${c.items.length}${cap}</span></button>`;
-    }).join('');
+    }).join('') +
+    `<button class="fxchip armor-link" data-page="armor" title="Armor has its own tab"><span>Armor</span><span class="c">${armorCount}</span></button>`;
   const pouch = $('#inv-pouch');
   if (pouch) {
     const cap = current.cap;
@@ -938,6 +1009,20 @@ function renderInventory() {
     if (!f) return true;
     return [it.name, it.caption, it.kind, it.effect_name, it.set_name, it.category].some((v) => v && String(v).toLowerCase().includes(f));
   });
+  const armorHint = $('#inv-armor-hint');
+  if (armorHint) {
+    const armorMatch = f && (cat().armor || []).some((a) =>
+      [a.name, a.set_name, a.caption, ...((a.effect_info || []).map((e) => e.name))]
+        .some((v) => v && String(v).toLowerCase().includes(f)));
+    if (armorMatch) {
+      armorHint.innerHTML = `<span>Armor has its own tab.</span> ` +
+        `<button class="btn tiny" data-armor-search>Search armor for "${esc(S.inv.filter)}"</button>`;
+      armorHint.hidden = false;
+    } else {
+      armorHint.hidden = true;
+      armorHint.innerHTML = '';
+    }
+  }
   const grid = $('#inv-grid');
   if (!items.length) {
     grid.innerHTML = `<div class="empty"><b>Nothing here</b>${f ? 'No item matches the filter.' : 'This pouch category is empty.'}</div>`;
@@ -1118,7 +1203,12 @@ function renderArmor() {
     if (S.armor.slot && p.slot !== S.armor.slot) return false;
     if (S.armor.owned && !p.owned) return false;
     if (S.armor.set && p.set_key !== S.armor.set) return false;
-    if (f && !(p.name + ' ' + (p.set_name || '')).toLowerCase().includes(f)) return false;
+    if (f) {
+      const hay = [p.name, p.set_name, p.current && p.current.caption,
+        ...((p.current && p.current.effect_info) || []).map((e) => e.name)]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(f)) return false;
+    }
     return true;
   });
   const grid = $('#armor-grid');
@@ -1147,7 +1237,10 @@ function effectNotes(list) {
     const desc = effectDesc(e);
     if (!desc || seen.has(e.type)) continue;
     seen.add(e.type);
-    rows.push(`<div class="fxnote"><b>${esc(e.name)}</b><span>: ${esc(desc)}</span></div>`);
+    const level = Math.max(1, e.level || 1);
+    const amount = effectAmount(e.type, level);
+    const shown = amount || desc;
+    rows.push(`<div class="fxnote"><b>${esc(e.name)}${level > 1 && !e.set ? ` Lv. ${level}` : ''}</b><span>: ${esc(shown)}</span></div>`);
   }
   return rows.length ? `<div class="fxnotes">${rows.join('')}</div>` : '';
 }
@@ -2028,11 +2121,21 @@ function drawMap() {
   drawMedallions(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
   const pos = playerPos();
+  const ping = $('#player-ping');
+  let pingShown = false;
   if (pos && S.map.layer === playerLayer()) {
     const sx = S.map.tx + pr.x(pos.x) * S.map.zoom;
     const sy = S.map.ty + pr.y(pos.z) * S.map.zoom;
-    if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) drawPlayer(ctx, sx, sy);
+    if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) {
+      drawPlayer(ctx, sx, sy);
+      if (ping) {
+        ping.style.transform = `translate(${sx}px, ${sy}px)`;
+        ping.hidden = false;
+        pingShown = true;
+      }
+    }
   }
+  if (ping && !pingShown) ping.hidden = true;
   requestMinimapDraw();
 }
 
@@ -2417,7 +2520,7 @@ function renderProgress() {
     const iconFile = mapIconFile(x.item.cat, x.state);
     return `<div class="prow${x.state >= 2 ? ' found' : x.state === 1 ? ' started' : ''}">` +
       (iconFile ? `<img class="pico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
-      `<span><span class="pn">${esc(x.item.name)}</span><span class="pm">${layerLabel(x.item.layer)}${d !== null ? ` · ${fmtDist(d)}` : ''}</span></span>` +
+      `<span class="pi"><span class="pn">${esc(x.item.name)}</span><span class="pm">${layerLabel(x.item.layer)}${d !== null ? ` · ${fmtDist(d)}` : ''}</span></span>` +
       `<span class="pd">${state}</span><button class="go" data-midx="${x.index}">Map</button></div>`;
   }).join('') : `<div class="empty"><b>Nothing here</b>No places match this filter.</div>`;
 }
@@ -2554,8 +2657,17 @@ function renderCookDetail(it) {
   else if (it.hearts > 0) h = `<div class="hearts">${hearts(it.hearts)}</div><div class="h-text">Restores ${fmtHearts(it.hearts)} ${it.hearts === 1 ? 'heart' : 'hearts'}</div>`;
   else h = `<div class="h-text dimmed">No hearts restored</div>`;
   let fx;
-  if (it.effect && it.effect !== 'LifeMaxUp') fx = `<div class="effect">${sigil(it.effect)}<span>${esc(it.effect_name)}</span>${it.seconds ? `<span class="time">${fmtTime(it.seconds)}</span>` : ''}</div>` +
-    staminaRecoveryHTML(it) + extraStaminaHTML(it);
+  if (it.effect && it.effect !== 'LifeMaxUp') {
+    const level = Math.min(EFFECT_MAX_LEVEL[it.effect] || 3, Number(it.level) || 1);
+    const amount = effectAmount(it.effect, level);
+    const gearLevel = gearEffectLevels()[it.effect] || 0;
+    const totalLevel = Math.min(EFFECT_MAX_LEVEL[it.effect] || 3, gearLevel + level);
+    const totalAmount = effectAmount(it.effect, totalLevel);
+    fx = `<div class="effect">${sigil(it.effect)}<span>${esc(it.effect_name)}</span>${it.seconds ? `<span class="time">${fmtTime(it.seconds)}</span>` : ''}</div>` +
+      (amount ? `<div class="fx-amount">Lv. ${level}: ${esc(amount)}</div>` : '') +
+      (gearLevel ? `<div class="fx-total">With current armor and set bonuses: Lv. ${totalLevel}, ${esc(totalAmount || amount)}</div>` : '') +
+      staminaRecoveryHTML(it) + extraStaminaHTML(it);
+  }
   else if (it.mixed) fx = `<div class="effect none">Mixed effects cancel out, so this cooks with none.</div>`;
   else fx = it.effect === 'LifeMaxUp' ? '' : `<div class="effect none">No effect</div>`;
   const pot = (it.pot || []).map((p) => `<li><button data-invactor="${esc(p.actor)}"><span class="mini">${art(p, 'i')}</span><span class="pn">${esc(p.name)}</span><span class="pc">×${p.n}</span></button></li>`).join('');
@@ -2581,6 +2693,27 @@ function openSettings(on) {
   $('#btn-settings').setAttribute('aria-pressed', String(on));
   if (on) renderSettings();
 }
+function pollSelect() {
+  const current = Math.round(Number((dyn().save && dyn().save.poll_s) || S.settings.poll_s || 15));
+  const values = [5, 10, 15, 30, 60];
+  if (!values.includes(current)) values.push(current);
+  values.sort((a, b) => a - b);
+  return `<select id="poll-interval" class="select" style="max-width:130px" aria-label="Refresh interval">` +
+    values.map((v) => `<option value="${v}"${v === current ? ' selected' : ''}>${v} seconds</option>`).join('') +
+    `</select>`;
+}
+function rebuildStatusText() {
+  const rb = dyn().save && dyn().save.rebuild;
+  if (!rb) return 'Rebuild icons, maps, and item data from the game files. This can take several minutes.';
+  if (S.rebuildStarted && !rb.running && !rb.done && !rb.error) return 'Starting rebuild...';
+  if (rb.running) {
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - (rb.started || 0)));
+    return `Rebuilding. ${elapsed}s elapsed. This can take several minutes.`;
+  }
+  if (rb.error) return `Build failed: ${rb.message || rb.error}`;
+  if (rb.done) return rb.message || 'Data rebuilt.';
+  return 'Rebuild icons, maps, and item data from the game files. This can take several minutes.';
+}
 function renderSettings() {
   const meta = (cat().meta && cat().meta.counts) || {};
   const st = S.settings;
@@ -2589,12 +2722,27 @@ function renderSettings() {
     `<div class="row"><span class="t">Always on top</span><button class="switch" data-setkey="on_top" role="switch" aria-checked="${!!st.on_top}"></button><span class="s">Keeps the window above the game in borderless fullscreen.</span></div>` +
     `<div class="row"><span class="t">Start minimized</span><button class="switch" data-setkey="start_hidden" role="switch" aria-checked="${!!st.start_hidden}"></button><span class="s">Applies the next time the companion starts.</span></div>` +
     `<div class="row"><span class="t">Save slot</span><select id="save-slot" class="select" style="max-width:230px" aria-label="Save slot"></select><span class="s">Auto shows the newest save. Pick a slot to keep the companion on one character.</span></div>` +
-    `<div class="row"><span class="t">Refresh interval</span><span class="s" style="grid-column:auto;color:var(--text)">${(dyn().save && dyn().save.poll_s) || 15}s</span><span class="s">The window checks for a newer save on this interval. Use Refresh now for an immediate check.</span></div>` +
-    `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild with <span class="kbd">build_companion_data.py</span> after a game update.</span></div>` +
+    `<div class="row"><span class="t">Refresh interval</span>${pollSelect()}<span class="s">The window checks for a newer save on this interval. Use Refresh now to check immediately.</span></div>` +
+    `<div class="row"><span class="t">Rebuild data</span><button class="btn" data-act="rebuild"${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? ' disabled' : ''}>${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? 'Rebuilding...' : 'Rebuild now'}</button><span class="s" id="rebuild-status">${esc(rebuildStatusText())}</span></div>` +
+    `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild after a game update or to refresh icons, maps, and item data.</span></div>` +
     `<div class="row"><span class="t">Shortcuts</span><span class="s"><span class="kbd">/</span> filter · <span class="kbd">r</span> refresh · <span class="kbd">1</span>-<span class="kbd">7</span> sections · <span class="kbd">Esc</span> clear</span></div>` +
     `<div class="actions"><button class="btn" data-act="reset-filters">Reset filters</button>` +
-    `<button class="btn" data-act="refresh">Refresh now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
+    `<button class="btn" data-act="refresh">Check save now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
   renderSaves();
+  const poll = $('#poll-interval');
+  if (poll) poll.addEventListener('change', (e) => call('set_setting', 'poll_s', Number(e.target.value)));
+}
+function renderRebuildStatus() {
+  const el = $('#rebuild-status');
+  if (!el) return;
+  el.textContent = rebuildStatusText();
+  const rb = dyn().save && dyn().save.rebuild;
+  const btn = $('[data-act="rebuild"]');
+  if (btn && rb) {
+    const pending = S.rebuildStarted && !rb.running && !rb.done && !rb.error;
+    btn.disabled = !!rb.running || pending;
+    btn.textContent = (rb.running || pending) ? 'Rebuilding...' : 'Rebuild now';
+  }
 }
 
 /* ------------------------------------------------------------------ status line */
@@ -2604,7 +2752,13 @@ function renderStatusLine() {
   const d = dyn();
   if (!d || !d.save) { el.textContent = 'Looking for a save'; return; }
   const sv = d.save;
-  if (sv.error === 'nosave') {
+  const rb = sv.rebuild;
+  if (rb && rb.running) {
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - (rb.started || 0)));
+    el.innerHTML = `<span class="spin"></span>Rebuilding data, ${elapsed}s elapsed…`;
+  } else if (rb && rb.error) {
+    el.innerHTML = `<span class="warn">Rebuild failed: ${esc(rb.message || rb.error)}</span>`;
+  } else if (sv.error === 'nosave') {
     el.innerHTML = '<span class="warn">No save yet.</span> Save once in the game and the companion fills in.';
   } else if (sv.checking) {
     el.innerHTML = '<span class="spin"></span>Scanning save…';
@@ -2781,9 +2935,18 @@ document.addEventListener('click', (e) => {
   if (t.dataset.page) { showPage(t.dataset.page); return; }
   if (t.dataset.pageGo) { showPage(t.dataset.pageGo); return; }
   if (t.dataset.invcat !== undefined) {
+    if (t.dataset.invcat === 'armor') { showPage('armor'); return; }
     S.inv.cat = t.dataset.invcat;
     S.inv.sel = null;
     if (S.page !== 'inventory') showPage('inventory'); else renderInventory();
+    return;
+  }
+  if (t.dataset.armorSearch !== undefined) {
+    S.armor.filter = S.inv.filter;
+    S.armor.slot = '';
+    S.armor.set = '';
+    S.armor.owned = false;
+    showPage('armor');
     return;
   }
   if (t.dataset.invkey !== undefined) {
@@ -2866,6 +3029,15 @@ document.addEventListener('click', (e) => {
   }
   if (t.dataset.act === 'reset-filters') { resetFilters(); openSettings(false); return; }
   if (t.dataset.act === 'refresh') { call('refresh'); return; }
+  if (t.dataset.act === 'rebuild') {
+    S.rebuildStarted = true;
+    t.disabled = true;
+    t.textContent = 'Rebuilding...';
+    const st = $('#rebuild-status');
+    if (st) st.textContent = 'Rebuilding. This can take several minutes.';
+    call('rebuild');
+    return;
+  }
   if (t.dataset.act === 'close-settings') { openSettings(false); return; }
 });
 
