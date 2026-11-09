@@ -428,10 +428,10 @@ const EFFECT_MAX_LEVEL = { ResistCold: 2, ResistHot: 2, ResistBurn: 2, ResistEle
                            MiasmaGuard: 3, LightEmission: 3, NotSlippy: 3, SwimSpeedUp: 3 };
 const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: 'armor', materials: 'material',
                      food: 'meal', zonai: 'device', keyitems: 'key item' };
-const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'villages', 'stables',
+const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'temples', 'villages', 'stables',
                           'great_fairies', 'labs', 'challenges', 'wells', 'chasms',
                           'old_maps', 'sages_wills', 'schema_stones'];
-const MAP_CAT_ORDER = ['shrines', 'towers', 'lightroots', 'stables', 'caves', 'villages',
+const MAP_CAT_ORDER = ['shrines', 'towers', 'temples', 'lightroots', 'stables', 'caves', 'villages',
                        'wells', 'great_fairies', 'labs', 'shops', 'dispensers',
                        'challenges', 'dragon_tears', 'chasms', 'locations',
                        'hidden_koroks', 'carry_koroks', 'bubbuls', 'hinoxes', 'taluses',
@@ -439,17 +439,16 @@ const MAP_CAT_ORDER = ['shrines', 'towers', 'lightroots', 'stables', 'caves', 'v
                        'sages_wills', 'addison_signposts', 'schema_stones',
                        'yiga_schematics'];
 const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
-const FAST_TRAVEL_CATS = new Set(['shrines', 'towers', 'lightroots']);
 const MAP_LABEL_MIN_ZOOM = {
   villages: 0.18, stables: 0.18, great_fairies: 0.20, labs: 0.22,
   challenges: 0.22, locations: 0.22, shops: 0.25, towers: 0.30,
-  shrines: 0.30, lightroots: 0.30, dispensers: 0.30, dragon_tears: 0.35,
+  temples: 0.20, shrines: 0.30, lightroots: 0.30, dispensers: 0.30, dragon_tears: 0.35,
   wells: 0.42, caves: 0.42, chasms: 0.42,
 };
 const MAP_LABEL_PRIORITY = {
   villages: 0, stables: 1, great_fairies: 2, labs: 3, challenges: 4,
-  towers: 5, shrines: 6, lightroots: 7, locations: 8, shops: 9,
-  dispensers: 10, dragon_tears: 11, wells: 12, caves: 13, chasms: 14,
+  towers: 5, temples: 6, shrines: 7, lightroots: 8, locations: 9, shops: 10,
+  dispensers: 11, dragon_tears: 12, wells: 13, caves: 14, chasms: 15,
 };
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
@@ -481,11 +480,13 @@ function restoreUiState(raw) {
     const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
     S.map.cats = new Set(map.cats.filter((k) => valid.has(k)));
   }
-  if (Number(map.cat_version || 1) < 2) {
+  const catVersion = Number(map.cat_version || 1);
+  if (catVersion < 2) {
     for (const k of ['villages', 'stables', 'great_fairies', 'labs', 'challenges']) {
       if ((cat().collectible_categories || []).some((c) => c.key === k)) S.map.cats.add(k);
     }
   }
+  if (catVersion < 3 && (cat().collectible_categories || []).some((c) => c.key === 'temples')) S.map.cats.add('temples');
 
   const progress = raw.progress || {};
   const pcats = new Set(['overview'].concat((cat().collectible_categories || [])
@@ -513,7 +514,7 @@ function uiState() {
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
            reveal: S.map.reveal, medals: S.map.medals, path: S.map.path,
-           search: S.map.search, cats: [...S.map.cats], cat_version: 2 },
+           search: S.map.search, cats: [...S.map.cats], cat_version: 3 },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
     cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort, all: S.cook.all },
@@ -626,6 +627,9 @@ function rebuildMaterialCounts() {
 function loadMapIcons() {
   S.map.iconImages = {};
   const files = new Set(Object.values(cat().map_icons || {}));
+  for (const it of (cat().collectibles || [])) {
+    if (it.icon) files.add(it.icon);
+  }
   for (const stateMap of Object.values(cat().map_icon_states || {})) {
     for (const file of Object.values(stateMap || {})) files.add(file);
   }
@@ -1669,7 +1673,7 @@ function mapVisible() {
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only && !FAST_TRAVEL_CATS.has(it.cat)) {
+    if (!only) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1688,7 +1692,7 @@ function searchResults() {
     if (it.map_hidden) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only && !FAST_TRAVEL_CATS.has(it.cat)) {
+    if (!only) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1757,9 +1761,17 @@ function mapLayerCounts(layer) {
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
     if (it.layer !== layer || it.map_hidden) continue;
-    if (!out[it.cat]) out[it.cat] = { total: 0, complete: 0 };
+    const only = mapOnly(it.cat);
+    const st = states[i] || 0;
+    if (!out[it.cat]) out[it.cat] = { all: 0, total: 0, complete: 0, matching: 0 };
+    out[it.cat].all++;
+    if (!only) {
+      if (S.map.found === 'missing' && st !== 0) continue;
+      if (S.map.found === 'found' && st === 0) continue;
+    }
     out[it.cat].total++;
-    if ((states[i] || 0) >= 2) out[it.cat].complete++;
+    out[it.cat].matching++;
+    if (st >= 2) out[it.cat].complete++;
   }
   return out;
 }
@@ -1905,7 +1917,8 @@ function renderMapCats() {
       `${medIcon ? `<img class="mico" src="companion_data/icons/${encodeURIComponent(medIcon)}" alt="">` : ''}` +
       `<span>Travel medallions</span><span class="n">${allMedals.length}</span></button>`
     : '';
-  const ordered = (cat().collectible_categories || []).filter((c) => counts[c.key])
+  const ordered = (cat().collectible_categories || [])
+    .filter((c) => counts[c.key] && (c.map_only || counts[c.key].matching > 0))
     .sort((a, b) => (MAP_CAT_RANK.has(a.key) ? MAP_CAT_RANK.get(a.key) : 999) -
                     (MAP_CAT_RANK.has(b.key) ? MAP_CAT_RANK.get(b.key) : 999) ||
                     a.label.localeCompare(b.label));
@@ -1915,7 +1928,8 @@ function renderMapCats() {
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
       : '';
-    const count = c.map_only ? n.total : `${n.complete}/${n.total}`;
+    const count = c.map_only ? n.all
+      : S.map.found === 'missing' ? n.matching : `${n.complete}/${n.all}`;
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
       `${marker}<span>${esc(c.label)}</span><span class="n">${count}</span></button>`;
   }).join('');
@@ -1935,7 +1949,7 @@ function renderMapDetail() {
     const d = p ? dist3(p, item) : null;
     const deg = p ? bearing(p, item) : null;
     const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
-    const iconFile = mapIconFile(item.cat, st);
+    const iconFile = item.icon || mapIconFile(item.cat, st);
     el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
       (only ? '' : `<div class="k">Status</div><div class="v">${state}</div>`) +
       `<div class="k">Position</div><div class="v">${fmtXYZ(item.x, item.y, item.z)}</div>` +
@@ -1998,7 +2012,7 @@ function renderResultsNote(searching) {
   if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
   if (S.map.found === 'all') { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only for collectibles · fast travel always shown</span>` +
+  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>` +
     '<button data-maprelax="found">Show all types</button>';
 }
 
@@ -2034,7 +2048,7 @@ function renderNearby() {
     const meta = catMeta(x.item.cat);
     const only = !!meta.map_only;
     const state = only ? '' : x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
-    const iconFile = mapIconFile(x.item.cat, x.state);
+    const iconFile = x.item.icon || mapIconFile(x.item.cat, x.state);
     const layer = x.item.layer !== S.map.layer ? layerLabel(x.item.layer) : '';
     const metaText = [meta.label, state, layer].filter(Boolean).join(' · ');
     return `<button data-midx="${x.index}">` +
@@ -2394,7 +2408,7 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   const meta = catMeta(it.cat);
   const color = meta.color;
   const st = xitem.state;
-  const iconFile = mapIconFile(it.cat, st);
+  const iconFile = it.icon || mapIconFile(it.cat, st);
   const icon = iconFile && S.map.iconImages && S.map.iconImages[iconFile];
   const alpha = 1;
   if (icon && icon.complete && icon.naturalWidth) {
@@ -2749,7 +2763,7 @@ function renderProgress() {
     const d = p ? dist3(p, x.item) : null;
     const meta = catMeta(x.item.cat);
     const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
-    const iconFile = mapIconFile(x.item.cat, x.state);
+    const iconFile = x.item.icon || mapIconFile(x.item.cat, x.state);
     return `<button class="prow${x.state >= 2 ? ' found' : x.state === 1 ? ' started' : ''}" data-midx="${x.index}">` +
       (iconFile ? `<img class="pico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
       `<span class="pi"><span class="pn">${esc(x.item.name)}</span><span class="pm">${layerLabel(x.item.layer)}${d !== null ? ` · ${fmtDist(d)}` : ''}</span></span>` +
@@ -3006,6 +3020,77 @@ function renderStatusLine() {
 
 /* ------------------------------------------------------------------ static events */
 
+function setupPaneSizers() {
+  for (const el of $$('.pane-resizer')) {
+    const key = el.dataset.pane;
+    const layout = el.closest('.split, .map-layout');
+    if (!layout) continue;
+    const isMap = layout.classList.contains('map-layout');
+    const varName = isMap ? (key === 'map-left' ? '--map-left-w' : '--map-side-w') : '--detail-w';
+    const cssWidth = parseFloat(getComputedStyle(layout).getPropertyValue(varName));
+    const defaultW = Number.isFinite(cssWidth) ? cssWidth : (isMap ? (key === 'map-left' ? 235 : 330) : 340);
+    const state = { w: defaultW, collapsed: false };
+    try {
+      const raw = localStorage.getItem('totk.pane.' + key);
+      if (raw) Object.assign(state, JSON.parse(raw));
+    } catch (e) { /* private mode */ }
+    const clampW = (w) => {
+      const max = Math.max(220, Math.min(620, layout.clientWidth - 220));
+      return Math.max(180, Math.min(max, w));
+    };
+    const apply = (save) => {
+      layout.style.setProperty(varName, `${state.collapsed ? 0 : state.w}px`);
+      if (isMap) layout.classList.toggle(key === 'map-left' ? 'map-left-collapsed' : 'map-side-collapsed', state.collapsed);
+      else layout.classList.toggle('pane-collapsed', state.collapsed);
+      const btn = el.querySelector('.pane-grip');
+      if (btn) {
+        const leftSide = isMap && key === 'map-left';
+        btn.textContent = state.collapsed ? (leftSide ? '›' : '‹') : (leftSide ? '‹' : '›');
+        btn.title = state.collapsed ? 'Expand pane' : 'Collapse pane';
+        btn.setAttribute('aria-label', btn.title);
+      }
+      if (save) {
+        try { localStorage.setItem('totk.pane.' + key, JSON.stringify(state)); } catch (e) { /* ignore */ }
+      }
+      if (isMap) { requestDraw(); requestMinimapDraw(); }
+    };
+    state.w = Math.max(180, Number(state.w) || defaultW);
+    apply(false);
+    const grip = el.querySelector('.pane-grip');
+    if (grip) grip.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      state.collapsed = !state.collapsed;
+      apply(true);
+    });
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || (e.target.closest && e.target.closest('.pane-grip'))) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = state.w;
+      state.collapsed = false;
+      apply(false);
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      const move = (ev) => {
+        const dx = ev.clientX - startX;
+        const w = isMap
+          ? (key === 'map-left' ? startW + dx : startW - dx)
+          : startW - dx;
+        state.w = clampW(w);
+        apply(false);
+      };
+      const up = () => {
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+        apply(true);
+      };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up, { once: true });
+    });
+  }
+}
+
 function attachStatic() {
   $('#inv-filter').addEventListener('input', (e) => { S.inv.filter = e.target.value; renderInventory(); });
   $('#armor-filter').addEventListener('input', (e) => { S.armor.filter = e.target.value; renderArmor(); });
@@ -3167,6 +3252,7 @@ function attachStatic() {
     S.map.fitted = false;
     if (S.page === 'map' && fitMap()) S.map.fitted = true;
   });
+  setupPaneSizers();
 }
 
 function closestButton(node) {
@@ -3244,11 +3330,15 @@ document.addEventListener('click', (e) => {
     renderMapCats(); drawMap(); return;
   }
   if (t.dataset.layer) { setMapLayer(t.dataset.layer); return; }
-  if (t.dataset.found) { S.map.found = t.dataset.found; renderMapToolbar(); renderNearby(); drawMap(); return; }
+  if (t.dataset.found) {
+    S.map.found = t.dataset.found;
+    renderMapToolbar(); renderMapCats(); renderNearby(); drawMap();
+    return;
+  }
   if (t.dataset.maprelax) {
     if (t.dataset.maprelax === 'found') S.map.found = 'all';
     else if (t.dataset.maprelax === 'reveal') S.map.reveal = true;
-    renderMapToolbar(); renderNearby(); drawMap(); requestMinimapDraw();
+    renderMapToolbar(); renderMapCats(); renderNearby(); drawMap(); requestMinimapDraw();
     return;
   }
   if (t.dataset.midx !== undefined) {

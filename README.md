@@ -132,14 +132,16 @@ icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
 map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
-dispensers, challenges and landmarks are separate map layers, each with its
-game marker art, including the shrine gate, lightroot bulb, and player arrow.
+dispensers, challenges, temples and landmarks are separate map layers, each with
+its game marker art, including the shrine gate, lightroot bulb, player arrow,
+and a per-temple icon for the five main dungeons. Temples sit directly below
+Skyview Towers in the layer list.
 Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list runs from
 fast travel and major places down to collectibles instead of sorting by marker
-count. Shrines, towers, and lightroots ignore the Found/Missing filter and stay
-at full opacity so every fast travel point is visible; the icon color shows its
-state. **Link** centers without changing the zoom, and at fit zoom it only
+count. Found/Missing applies to every marker layer; a category with no matching
+markers drops out of the layer list, and its count shows the matching total.
+**Link** centers without changing the zoom, and at fit zoom it only
 pings the marker because the whole map is already visible. The ping fades out
 smoothly instead of blinking off. Hovering a marker switches the cursor to a
 pointer and shows its name, layer, and state; place and fast travel names also
@@ -161,7 +163,10 @@ order, using the game's terrain height grids for Z. Marker details and
 **Near Link** or **Results** are on the right, with game-style X/Y/Z
 coordinates and a direction arrow from Link. Empty detail or Nearby panels are
 hidden instead of leaving a blank box. Map controls use a small vendored
-Material Symbols set so the app never fetches icons from a CDN.
+Material Symbols set so the app never fetches icons from a CDN. Every tab with
+a detail pane, plus both map sidebars, has a draggable divider; its grip
+collapses or expands that pane. Pane widths and collapsed state persist across
+restarts.
 Completion lists every tracked category and can show only missing entries.
 Clicking a completion row opens that place on the map. Armor shows a Ready or
 Need badge on the grid. The detail puts the item description first, then the
@@ -196,9 +201,9 @@ shows the matching icon in its top-left corner. The set panel shows the combined
 effect of wearing all pieces, the set's defense now, at Lv 2, and at max, and
 the set bonus with its measured value. Set bonuses unlock when every piece
 reaches Lv 2; Lv 3 and higher add defense only and do not strengthen the bonus.
-Weapons and shields show a fusion badge and the fused item in their details,
-including object fusions such as Rock. Weapons, bows, and shields with 3 or less durability
-pulse red.
+Weapons, bows, and shields show a fusion badge and the fused item in their
+details, including object fusions such as Rock, which uses a game texture
+instead of a plus glyph. Equipment with 3 or less durability pulses red.
 Cooking starts with dishes that the current pouch can make; **All recipes**
 adds the full recipe table with required ingredient slots and marks entries the
 pouch cannot cook yet. The dish detail shows the recovered portion of a stamina

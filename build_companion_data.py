@@ -140,6 +140,7 @@ CATEGORIES = {
     'dragon_tears': {'label': "Dragon's Tears", 'color': '#e97a6a', 'icon': 'location', 'kind': 'place'},
     'dispensers': {'label': 'Device Dispensers', 'color': '#9bd4a8', 'icon': 'location', 'kind': 'place'},
     'challenges': {'label': 'Challenges', 'color': '#e97a6a', 'icon': 'location', 'kind': 'place'},
+    'temples': {'label': 'Temples', 'color': '#e0b26a', 'icon': 'location', 'kind': 'temple'},
     'caves': {'label': 'Caves', 'color': '#d99a6c', 'icon': 'cave', 'kind': 'cave'},
     'wells': {'label': 'Wells', 'color': '#8fc6c8', 'icon': 'well', 'kind': 'well'},
     'chasms': {'label': 'Chasms', 'color': '#b47fd0', 'icon': 'chasm', 'kind': 'chasm'},
@@ -159,7 +160,7 @@ CATEGORIES = {
 # Place markers come from the game's LocationArea data and are map layers only;
 # they are not part of the completion percentage.
 MAP_PLACE_ORDER = ('villages', 'stables', 'great_fairies', 'labs', 'shops',
-                   'dragon_tears', 'dispensers', 'challenges')
+                   'dragon_tears', 'dispensers', 'challenges', 'temples')
 MAP_ONLY_KEYS = set(MAP_PLACE_ORDER)
 SKIP_LOCATION_NAMES = {
     'Lookout Landing', 'Korok Forest', 'Gerudo Town', 'Goron City',
@@ -193,6 +194,7 @@ MAP_ICON_SOURCES = {
     'dragon_tears': 'MapIconDragonTears_00',
     'dispensers': 'MapIconRecycleBox_00',
     'challenges': 'Nt_MapChallengeIcon_00',
+    'temples': 'MapIconDungeonLarge_L_RitoIcon',
     'caves': 'MapIconCaveM_72x72',
     'wells': 'MapIconCaveS_72x72',
     'chasms': 'MapIconCaveL_72x72',
@@ -209,6 +211,13 @@ MAP_ICON_SOURCES = {
     'yiga_schematics': 'MapIconShopEvil_58x58',
 }
 MAP_ICON_FRAMES = {'shrines': 'Nt_MapDungeonNewF_01'}
+TEMPLE_ICON_SOURCES = {
+    'temple_wind': 'MapIconDungeonLarge_L_RitoIcon',
+    'temple_fire': 'MapIconDungeonLarge_L_GolonIcon',
+    'temple_water': 'MapIconDungeonLarge_L_ZolaIcon',
+    'temple_lightning': 'MapIconDungeonLarge_L_GeldoIcon',
+    'temple_spirit': 'MapIconDungeonLarge_L_LaumiIcon',
+}
 MAP_ICON_ITEM_SOURCES = {
     'bubbuls': 'CaveMasterMedal',
     'sages_wills': 'Obj_SageWill',
@@ -883,6 +892,8 @@ class Builder:
                     item['hash'] = int(row['completion_hash']) & 0xffffffff
                 elif 'guid_hash' in row:
                     item['guid'] = str(row['guid_hash'])
+                if row.get('icon'):
+                    item['icon'] = row['icon']
                 if row.get('path'):
                     item['path'] = row['path']
                 items.append(item)
@@ -1464,6 +1475,16 @@ class Builder:
             y1 = min(img.height, y1 + pad)
             return img.crop((x0, y0, x1, y1))
 
+        def key_black(img, cutoff=14):
+            """Make the opaque black backing of a few map textures transparent."""
+            if img is None:
+                return None
+            img = img.convert('RGBA')
+            r, g, b = img.convert('RGB').split()
+            high = ImageChops.lighter(ImageChops.lighter(r, g), b)
+            img.putalpha(high.point(lambda v: 255 if v > cutoff else 0))
+            return img
+
         def save_icon(name, img):
             if img is None:
                 return None
@@ -1519,6 +1540,11 @@ class Builder:
         player = decode('Nt_MapPlayerIconNew_00')
         if player is not None:
             out['player'] = save_icon('player', tint_icon(player, '#fff0c2'))
+
+        for key, source in TEMPLE_ICON_SOURCES.items():
+            img = decode(source)
+            if img is not None:
+                out[key] = save_icon(key, key_black(img))
 
         for cat, source in MAP_ICON_SOURCES.items():
             if cat in ('shrines', 'lightroots'):

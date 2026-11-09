@@ -125,6 +125,14 @@ def pretty_actor(actor):
     return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', name).replace('_', ' ')
 
 
+# Fused rocks have no pouch icon in the game data. Use the Rock Salt item
+# texture, which is the closest game asset to a plain boulder.
+FUSE_NAME_ICONS = {
+    'Rock': 'Item_Ore_H.webp',
+    'Large Rock': 'Item_Ore_H.webp',
+}
+
+
 def fused_name(catalog, actor):
     entry = actor_entry(catalog, actor)
     if entry.get('name'):
@@ -152,7 +160,7 @@ def enrich_inventory(inv, catalog, cook, pouch_sizes=None):
                 if raw.get('fused'):
                     fused = actor_entry(catalog, raw['fused'])
                     it['fused_name'] = fused_name(catalog, raw['fused'])
-                    it['fused_icon'] = fused.get('icon')
+                    it['fused_icon'] = fused.get('icon') or FUSE_NAME_ICONS.get(it['fused_name'])
                 else:
                     it.pop('fused', None)
                     it.pop('fused_life', None)

@@ -56,6 +56,7 @@
           </div>
           <div class="gridwrap"><div class="grid" id="inv-grid"></div></div>
         </div>
+        <div class="pane-resizer" data-pane="inv"><button class="pane-grip" data-pane-toggle="inv" aria-label="Collapse details" title="Collapse details">›</button></div>
         <aside class="detail" id="inv-detail" aria-live="polite"></aside>
       </div>
     </section>
@@ -77,6 +78,7 @@
           </div>
           <div class="gridwrap"><div class="grid" id="armor-grid"></div></div>
         </div>
+        <div class="pane-resizer" data-pane="armor"><button class="pane-grip" data-pane-toggle="armor" aria-label="Collapse details" title="Collapse details">›</button></div>
         <aside class="detail" id="armor-detail" aria-live="polite"></aside>
       </div>
     </section>
@@ -96,11 +98,12 @@
             <button data-mcats="all">Show all</button>
             <button data-mcats="none">Hide all</button>
           </div>
-          <label class="map-reveal"><input type="checkbox" id="map-reveal"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Reveal full map</span></label>
-          <label class="map-reveal"><input type="checkbox" id="map-path"> <span class="msi sm" data-micon="route" aria-hidden="true"></span> <span>Hero's Path</span></label>
+          <label class="map-reveal" title="Fill in the whole current map layer instead of only the areas you have visited."><input type="checkbox" id="map-reveal"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Reveal full map</span></label>
+          <label class="map-reveal" title="Draw the route recorded in this save's footprint data, with distance, point count, and deaths."><input type="checkbox" id="map-path"> <span class="msi sm" data-micon="route" aria-hidden="true"></span> <span>Hero's Path</span></label>
           <div class="map-path-note" id="map-path-note" hidden></div>
           <div class="map-cats" id="map-cats"></div>
         </aside>
+        <div class="pane-resizer map-resizer" data-pane="map-left"><button class="pane-grip" data-pane-toggle="map-left" aria-label="Collapse map layers" title="Collapse map layers">‹</button></div>
         <div class="map-main">
           <div class="map-viewport" id="map-viewport">
             <img id="map-img" alt="" draggable="false">
@@ -121,6 +124,7 @@
             <div class="map-coords" id="map-coords" hidden></div>
           </div>
         </div>
+        <div class="pane-resizer map-resizer" data-pane="map-side"><button class="pane-grip" data-pane-toggle="map-side" aria-label="Collapse map details" title="Collapse map details">›</button></div>
         <aside class="map-side">
           <div id="map-detail" class="map-detail"></div>
           <h3 class="label" id="map-near-title">Near Link</h3>
@@ -160,6 +164,7 @@
           </div>
           <div class="gridwrap"><div class="grid comp-grid" id="comp-grid"></div></div>
         </div>
+        <div class="pane-resizer" data-pane="comp"><button class="pane-grip" data-pane-toggle="comp" aria-label="Collapse details" title="Collapse details">›</button></div>
         <aside class="detail" id="comp-detail" aria-live="polite"></aside>
       </div>
     </section>
@@ -180,6 +185,7 @@
           </div>
           <div class="gridwrap"><div class="grid" id="cook-grid"></div></div>
         </div>
+        <div class="pane-resizer" data-pane="cook"><button class="pane-grip" data-pane-toggle="cook" aria-label="Collapse details" title="Collapse details">›</button></div>
         <aside class="detail" id="cook-detail" aria-live="polite"></aside>
       </div>
     </section>
