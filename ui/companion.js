@@ -2219,12 +2219,12 @@ function drawMap() {
   const ping = $('#player-ping');
   const pingActive = S.map.pingUntil > performance.now();
   let pingShown = false;
-  if (pingActive && pos && S.map.layer === playerLayer()) {
+  if (pos && S.map.layer === playerLayer()) {
     const sx = S.map.tx + pr.x(pos.x) * S.map.zoom;
     const sy = S.map.ty + pr.y(pos.z) * S.map.zoom;
     if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) {
       drawPlayer(ctx, sx, sy);
-      if (ping) {
+      if (pingActive && ping) {
         ping.style.transform = `translate(${sx}px, ${sy}px)`;
         ping.hidden = false;
         pingShown = true;
