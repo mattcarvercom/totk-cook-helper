@@ -47,6 +47,47 @@ SLOTS = ('Head', 'Upper', 'Lower')
 SLOT_ORDER = {'Head': 0, 'Upper': 1, 'Lower': 2}
 SLOT_WORD = {'Head': 'Head', 'Upper': 'Body', 'Lower': 'Legs'}
 
+# The raw SeriesName values are internal labels. These are the set names used
+# by the armor screen and the item names.
+SET_DISPLAY_NAMES = {
+    'Hylia': 'Hylian',
+    'HyliaArmor': "Soldier's",
+    'Korok': 'Of the Wild',
+    'NightGlow': 'Radiant',
+    'Zonanium': 'Zonaite',
+    'NotSlippy': 'Froggy',
+    'Diving': 'Glide',
+    'ChemicalFire': 'Ember',
+    'ChemicalIce': 'Frostbite',
+    'ChemicalElectric': 'Charged',
+    'UnderGround': 'Depths',
+    'Climb': 'Climbing',
+    'Power': 'Barbarian',
+    'Sheikah': 'Stealth',
+    'Goron': 'Flamebreaker',
+    'Rito': 'Snowquill',
+    'Gerudo': 'Desert Voe',
+    'GerudoLady': 'Gerudo',
+    'RoyalGuard': 'Royal Guard',
+    'Kishin': 'Fierce Deity',
+    'PhantomGanon': 'Evil Spirit',
+    'Tingle': "Tingle's",
+    'OcarinaOfTime': 'Of Time',
+    'TwilightPrincess': 'Of Twilight',
+    'SkywardSword': 'Of the Sky',
+    'WindWaker': 'Of Wind',
+    'AncientHeroSoul': 'Ancient Hero',
+    'NewHero': "Champion's",
+    'SheikMask': "Sheik's",
+    'ThunderHelm': 'Lightning',
+    'Fashonable': 'Cece',
+    'Naked': 'Well-Worn',
+    'None': 'Island Lobster',
+    'MagicArmor': 'Mystic',
+    'Zelda1': 'Hero',
+    'LightEmission': "Miner's",
+}
+
 # Armor effect types without a row in StaticMsg/Buff.msbt. The names follow
 # the effect wording used by the armor screen and the armor captions.
 EFFECT_NAME_OVERRIDES = {
@@ -490,7 +531,8 @@ class Builder:
         for actor, row in sorted(self.armor_raw.items()):
             base = root(actor)
             set_key = base.rsplit('_', 1)[0]
-            set_name = row['series'] or self.name(base)
+            set_name = (SET_DISPLAY_NAMES.get(row['series']) or row['series']
+                        or self.name(base))
             row['base'] = base
             row['set_key'] = set_key
             row['set_name'] = set_name

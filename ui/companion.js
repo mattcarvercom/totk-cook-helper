@@ -664,7 +664,8 @@ function renderArmorDetail(p) {
   const setBlock = setPieces.length > 1 || bonus.length
     ? `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
       pieceRows + bonusBlock + `</div>`
-    : `<h3 class="label">Set</h3><p class="note">This is a standalone piece with no set bonus.</p>`;
+    : `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
+      `<div class="dim">This piece is worn on its own. No set bonus.</div></div>`;
 
   el.innerHTML = `<div class="in"><div class="d-head">${art({ icon: p.icon }, 'hero')}<div><h2 class="d-name">${esc(p.name)}</h2>` +
     `<div class="d-sub">${esc(p.set_name || 'Armor')} · ${owned ? `owned, level ${p.owned.rank || 1}` : 'not owned'}</div></div></div>` +
