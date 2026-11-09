@@ -15,6 +15,7 @@ import glob
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
 import tempfile
@@ -321,6 +322,9 @@ class App:
         self.bootstrap = None
         self.save = None
         self.save_path = self.save_mtime = None
+        self.caption_for = None
+        self.caption_url = None
+        self.caption_v = None
         self.error = None
         self.checking = False
         self._all_recipes = None
@@ -497,6 +501,7 @@ class App:
             self.s['save_path'] = ''
             save_settings(self.s)
             self.save_path = self.save_mtime = None
+            self.caption_for = None
             self.poll_once(force=True)
             self.push()
             return True
@@ -508,6 +513,7 @@ class App:
         self.s['save_path'] = path
         save_settings(self.s)
         self.save_path = self.save_mtime = None
+        self.caption_for = None
         self.poll_once(force=True)
         self.push()
         return True
@@ -557,7 +563,25 @@ class App:
             self.push_status()
 
     def save_status(self):
+        caption = None
+        caption_v = None
+        if self.save_path:
+            cap_path = os.path.join(os.path.dirname(self.save_path), 'caption.sav')
+            try:
+                cap_mtime = os.path.getmtime(cap_path)
+            except OSError:
+                cap_mtime = None
+            key = (cap_path, cap_mtime)
+            if key != self.caption_for:
+                caption, caption_v = read_caption(self.save_path)
+                self.caption_for = key
+                self.caption_url = caption
+                self.caption_v = caption_v
+            else:
+                caption, caption_v = self.caption_url, self.caption_v
         return {'slot': os.path.basename(os.path.dirname(self.save_path)) if self.save_path else None,
+                'path': self.save_path, 'dir': os.path.dirname(self.save_path) if self.save_path else None,
+                'caption': caption, 'caption_v': caption_v,
                 'mtime': self.save_mtime, 'error': self.error, 'live': 'off',
                 'checking': self.checking, 'next_scan': self.next_scan, 'poll_s': self.poll_s,
                 'rebuild': dict(self.rebuild_state)}
@@ -604,6 +628,39 @@ class App:
             'platform': 'linux',
         }
         return payload
+
+
+def read_caption(save_path):
+    """Extract the save-menu screenshot from the sibling caption.sav."""
+    cap_path = os.path.join(os.path.dirname(save_path), 'caption.sav')
+    if not os.path.isfile(cap_path):
+        return None, None
+    try:
+        data = open(cap_path, 'rb').read()
+        jpg_offset = None
+        for i in range(0x28, min(0x1c0, len(data) - 8) + 1, 8):
+            h, value = struct.unpack_from('<II', data, i)
+            if h == 0x63696a32:
+                jpg_offset = value
+                break
+        if not jpg_offset:
+            return None, None
+        size = struct.unpack_from('<I', data, jpg_offset)[0]
+        if size <= 0 or jpg_offset + 4 + size > len(data):
+            return None, None
+        jpg = data[jpg_offset + 4:jpg_offset + 4 + size]
+        if not jpg.startswith(b'\xff\xd8'):
+            return None, None
+        stamp = int(os.path.getmtime(cap_path))
+        fname = 'save-caption-%d.jpg' % stamp
+        out = os.path.join(DATA, fname)
+        tmp = out + '.tmp'
+        with open(tmp, 'wb') as f:
+            f.write(jpg)
+        os.replace(tmp, out)
+        return fname, stamp
+    except (OSError, struct.error):
+        return None, None
 
 
 def already_running():

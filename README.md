@@ -140,7 +140,10 @@ fast travel and major places down to collectibles instead of sorting by marker
 count. Shrines, towers, and lightroots ignore the Found/Missing filter and stay
 at full opacity so every fast travel point is visible; the icon color shows its
 state. **Link** centers without changing the zoom, and at fit zoom it only
-pings the marker because the whole map is already visible. **Reveal full map**
+pings the marker because the whole map is already visible. The ping fades out
+smoothly instead of blinking off. Hovering a marker switches the cursor to a
+pointer and shows its name, layer, and state; place and fast travel names also
+appear as labels when you zoom in. **Reveal full map**
 is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
 remain visible over unexplored areas. The Sky layer draws the Hyrule base,
@@ -160,9 +163,11 @@ coordinates and a direction arrow from Link. Empty detail or Nearby panels are
 hidden instead of leaving a blank box. Map controls use a small vendored
 Material Symbols set so the app never fetches icons from a CDN.
 Completion lists every tracked category and can show only missing entries.
-Armor shows a Ready or Need badge on the grid. The detail puts the item
-description first, then the piece effect and a compact set panel with piece
-levels and the set-bonus description. Upgrades list only levels still ahead of
+Clicking a completion row opens that place on the map. Armor shows a Ready or
+Need badge on the grid. The detail puts the item description first, then the
+piece effect and a compact set panel. The set panel separates stacked piece
+effects from the set bonus and shows the piece-count formula, such as Stealth Up
+Lv. 3 from three Lv. 1 pieces. Upgrades list only levels still ahead of
 the current rank. Upgrade materials and material details have a **Sources**
 action: it lists shops with prices and stock, enemy drops with their spawn
 counts, and world spawns, then can pin
@@ -172,7 +177,8 @@ map placements, all from your own game files.
 
 The status page combines hearts, stamina wheels, energy cells, combat totals,
 sages, special powers, equipped gear, and active armor effects, using the
-game's sage portraits and ability icons. Attack includes the fused material and
+game's sage portraits and ability icons. The Link header shows the save-menu
+screenshot from `caption.sav` and the full `progress.sav` path. Attack includes the fused material and
 weapon modifier; Defense is the sum of the three worn pieces. Active Attack Up
 also shows the adjusted value. Journey shows total playtime, deaths, distance,
 and Hero's Path points from the save. Key item chips show Korok Seeds, Bubbul

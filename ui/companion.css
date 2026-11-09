@@ -120,8 +120,11 @@ body { overflow: hidden; }
 .hero .who { display: flex; align-items: center; gap: 14px; }
 .hero .mark { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: rgba(214,196,140,.06); }
 .hero .mark svg { width: 34px; height: 34px; color: var(--gold); }
+.hero .save-thumb { width: 104px; height: 59px; flex: none; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: rgba(8,12,10,.7); box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+.hero .save-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .hero .h-name { font: 500 24px/1.1 var(--ui); color: var(--gold-hi); margin: 0; }
 .hero .h-sub { color: var(--dim); font-size: 13.5px; margin-top: 3px; }
+.hero .save-path { max-width: 520px; margin-top: 3px; overflow: hidden; color: var(--faint); font-size: 11.5px; white-space: nowrap; text-overflow: ellipsis; }
 .hero .hearts { max-width: none; margin: 8px 0 2px; }
 .hero .h-line { color: var(--text); font-size: 14px; }
 .hero .rupees { font: 500 26px/1 var(--ui); color: var(--gold-hi); text-align: right; }
@@ -329,17 +332,17 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .dir-label { margin-left: 4px; color: var(--faint); font: 500 10.5px var(--sc); }
 #map-img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; user-select: none; pointer-events: none; }
 #map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.player-ping { position: absolute; left: 0; top: 0; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; pointer-events: none; z-index: 1; }
+.player-ping { position: absolute; left: 0; top: 0; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; pointer-events: none; z-index: 1; opacity: 1; transition: opacity .4s ease; }
 .player-ping[hidden] { display: none; }
-.player-ping::before, .player-ping::after {
+.player-ping.fading { opacity: 0; }
+.player-ping::before {
   content: ''; position: absolute; inset: 0; border-radius: 50%;
-  border: 2px solid rgba(255, 232, 170, .85);
-  animation: player-ping 1.8s ease-out infinite;
+  border: 1.5px solid rgba(255, 240, 205, .55);
+  animation: player-ping 2.2s ease-out infinite;
 }
-.player-ping::after { animation-delay: .9s; }
 @keyframes player-ping {
-  0% { transform: scale(.35); opacity: .9; }
-  100% { transform: scale(2.6); opacity: 0; }
+  0% { transform: scale(.35); opacity: .7; }
+  100% { transform: scale(2.8); opacity: 0; }
 }
 .minimap {
   position: absolute; right: 12px; bottom: 12px; width: 190px; height: 158px; z-index: 3;
@@ -349,6 +352,9 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .minimap img { width: 100%; height: 100%; object-fit: fill; opacity: 0.92; pointer-events: none; }
 .minimap canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
 .minimap::after { content: ''; position: absolute; inset: 0; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); pointer-events: none; }
+.map-tooltip { position: fixed; z-index: 30; max-width: 280px; padding: 5px 8px 6px; border: 1px solid var(--line); border-radius: 7px; background: rgba(6,9,12,.95); color: var(--gold-hi); font-size: 13px; line-height: 1.25; box-shadow: 0 6px 18px rgba(0,0,0,.5); pointer-events: none; }
+.map-tooltip[hidden] { display: none; }
+.map-tooltip small { display: block; margin-top: 2px; color: var(--faint); font-size: 11.5px; }
 .map-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); background: rgba(6,9,12,.8); z-index: 2; pointer-events: none; }
 .map-loading[hidden] { display: none; }
 .map-side { min-height: 0; overflow-y: auto; border-left: 1px solid var(--line-soft); padding: 12px 14px 18px; scrollbar-width: thin; scrollbar-color: rgba(214,196,140,.3) transparent; }
@@ -420,8 +426,9 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .pcard .num { font: 500 14px var(--ui); color: var(--gold); white-space: nowrap; }
 .pcard .bar { margin-top: 8px; }
 .pcard .foot { display: flex; justify-content: space-between; margin-top: 5px; color: var(--faint); font-size: 11.5px; }
-.prow { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; padding: 7px 8px; border-bottom: 1px solid var(--line-soft); }
+.prow { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; width: 100%; padding: 7px 8px; border: 0; border-bottom: 1px solid var(--line-soft); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .prow:hover { background: rgba(214,196,140,.05); }
+.prow:focus-visible { outline: 1px solid var(--line-strong); outline-offset: -1px; }
 .prow .pico { width: 19px; height: 19px; flex: none; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
 .prow .pi { flex: 0 1 470px; min-width: 160px; }
 .prow .pn { display: block; color: var(--text); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

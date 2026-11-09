@@ -16,8 +16,8 @@ const S = {
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
          reveal: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
-         fitted: false, layerSet: false, pending: null, raf: 0, drag: null,
-         iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0,
+         fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
+         iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
          miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'found', filter: '' },
@@ -440,6 +440,17 @@ const MAP_CAT_ORDER = ['shrines', 'towers', 'lightroots', 'stables', 'caves', 'v
                        'yiga_schematics'];
 const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
 const FAST_TRAVEL_CATS = new Set(['shrines', 'towers', 'lightroots']);
+const MAP_LABEL_MIN_ZOOM = {
+  villages: 0.18, stables: 0.18, great_fairies: 0.20, labs: 0.22,
+  challenges: 0.22, locations: 0.22, shops: 0.25, towers: 0.30,
+  shrines: 0.30, lightroots: 0.30, dispensers: 0.30, dragon_tears: 0.35,
+  wells: 0.42, caves: 0.42, chasms: 0.42,
+};
+const MAP_LABEL_PRIORITY = {
+  villages: 0, stables: 1, great_fairies: 2, labs: 3, challenges: 4,
+  towers: 5, shrines: 6, lightroots: 7, locations: 8, shops: 9,
+  dispensers: 10, dragon_tears: 11, wells: 12, caves: 13, chasms: 14,
+};
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -853,14 +864,19 @@ function renderStatus() {
   const pathKm = st.path_distance !== null && st.path_distance !== undefined ? st.path_distance / 1000 : null;
   const rupee = ainfo('PutRupee_Gold');
   const rupeeIcon = rupee.icon ? `<img class="rupee-icon" src="companion_data/icons/${encodeURIComponent(rupee.icon)}" alt="">` : '';
+  const saveInfo = d.save || {};
+  const saveCaption = saveInfo.caption ? `companion_data/${encodeURI(saveInfo.caption)}` : '';
+  const savePath = saveInfo.path || saveInfo.dir || '';
+  const savePathShort = savePath.replace(/^\/home\/[^/]+/, '~');
   el.innerHTML = `
   <div class="status-grid">
     <section class="card hero status-main">
       <div class="status-top">
         <div class="who">
-          <div class="mark">${icon('check', 'g')}</div>
+          ${saveCaption ? `<div class="save-thumb"><img src="${saveCaption}" alt="Save screenshot"></div>` : `<div class="mark">${icon('check', 'g')}</div>`}
           <div><h1 class="h-name">Link</h1>
-            <div class="h-sub">${esc(layer)} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div></div>
+            <div class="h-sub">${esc(layer)} · ${esc((d.save && d.save.slot) || 'save')} · read-only</div>
+            ${savePath ? `<div class="save-path" title="${esc(savePath)}">${esc(savePathShort)}</div>` : ''}</div>
         </div>
         <div class="rupees">${rupeeIcon}<span>${fmtNum(st.rupees)}</span><small>RUPEES</small></div>
       </div>
@@ -1192,15 +1208,17 @@ function fullSetEffects(pieces) {
   for (const piece of pieces) {
     const row = (piece.ranks || [])[0];
     for (const fx of (row && row.effect_info) || []) {
-      const cur = totals.get(fx.type) || { type: fx.type, name: fx.name, level: 0, pieces: 0 };
-      cur.level += Math.max(1, fx.level || 1);
+      const levelBased = !!(EFFECT_AMOUNT[fx.type] || EFFECT_MAX_LEVEL[fx.type]);
+      const cur = totals.get(fx.type) || { type: fx.type, name: fx.name, level: 0, pieces: 0, levelBased };
+      if (levelBased) cur.level += Math.max(1, fx.level || 1);
+      else cur.level = 1;
       cur.pieces += 1;
       totals.set(fx.type, cur);
     }
   }
   return [...totals.values()]
     .filter((x) => x.pieces > 1)
-    .map((x) => ({ ...x, level: Math.min(EFFECT_MAX_LEVEL[x.type] || 3, x.level) }));
+    .map((x) => ({ ...x, level: x.levelBased ? Math.min(EFFECT_MAX_LEVEL[x.type] || 3, x.level) : 1 }));
 }
 
 function armorCell(p, selected) {
@@ -1285,13 +1303,12 @@ function effectNotes(list) {
   const seen = new Set();
   const rows = [];
   for (const e of (list || [])) {
-    const desc = effectDesc(e);
-    if (!desc || seen.has(e.type)) continue;
+    if (seen.has(e.type)) continue;
     seen.add(e.type);
     const level = Math.max(1, e.level || 1);
-    const amount = effectAmount(e.type, level);
-    const shown = amount || desc;
-    rows.push(`<div class="fxnote"><b>${esc(e.name)}${level > 1 && !e.set ? ` Lv. ${level}` : ''}</b><span>: ${esc(shown)}</span></div>`);
+    const shown = effectAmount(e.type, level) || effectDesc(e);
+    rows.push(`<div class="fxnote"><b>${esc(e.name)}${level > 1 && !e.set ? ` Lv. ${level}` : ''}</b>` +
+      (shown ? `<span>: ${esc(shown)}</span>` : '') + `</div>`);
   }
   return rows.length ? `<div class="fxnotes">${rows.join('')}</div>` : '';
 }
@@ -1354,8 +1371,7 @@ function renderArmorDetail(p) {
 
   const effects = current.effect_info || [];
   const effectBlock = effects.length
-    ? `<h3 class="label">Piece effect</h3><div class="tagrow">${effectChips(effects, 'eff')}</div>` +
-      effectNotes(effects)
+    ? `<h3 class="label">Piece effect</h3>` + effectNotes(effects)
     : '';
 
   const slotOrder = { Head: 0, Upper: 1, Lower: 2 };
@@ -1384,10 +1400,12 @@ function renderArmorDetail(p) {
   const nowNote = !ownedPieces.length || allOwned ? '' : ', owned only';
   const stacked = fullSetEffects(setPieces);
   const stackLine = (multiPiece && stacked.length)
-    ? `<div class="set-effects"><span class="lab" title="Piece effects stack as you wear more pieces of the set. Upgrading a piece adds defense, not effect levels.">Full set</span>` +
+    ? `<div class="set-effects"><span class="lab" title="Piece effects stack as you wear more pieces of the set. Upgrading a piece adds defense, not effect levels.">Piece effects · ${setPieces.length} pieces</span>` +
       stacked.map((x) => {
-        const amount = effectAmount(x.type, x.level);
-        return `<span class="set-effect"><b>${esc(x.name)}${x.level > 1 ? ` Lv. ${x.level}` : ''}</b>${amount ? `: ${esc(amount)}` : ''}</span>`;
+        const amount = x.levelBased ? effectAmount(x.type, x.level) : '';
+        const formula = x.levelBased && x.level > 1 && x.level === x.pieces
+          ? ` (${x.pieces} × Lv. 1)` : '';
+        return `<span class="set-effect"><b>${esc(x.name)}${x.levelBased && x.level > 1 ? ` Lv. ${x.level}${formula}` : ''}</b>${amount ? `: ${esc(amount)}` : ''}</span>`;
       }).join('') + `</div>`
     : '';
   const bonusItems = bonus.map((x) => {
@@ -1412,7 +1430,7 @@ function renderArmorDetail(p) {
     bonusWhy = 'No set bonus. Upgrades add defense only.';
   }
   const bonusBlock = bonus.length
-    ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Unlocks at Lv ${SET_BONUS_LEVEL}`}</span>` +
+    ? `<div class="bonus-line"><span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Set bonus active' : `Set bonus · Lv ${SET_BONUS_LEVEL} unlock`}</span>` +
       `${bonusItems}<span class="bonus-why">${esc(bonusWhy)}</span></div>`
     : (bonusWhy ? `<div class="bonus-line"><span class="bonus-why">${esc(bonusWhy)}</span></div>` : '');
   const setBlock = (multiPiece || bonus.length)
@@ -2145,12 +2163,21 @@ function showPlayerPing(ms) {
   if (!playerPos()) return;
   const duration = ms || 3200;
   S.map.pingUntil = performance.now() + duration;
+  const el = $('#player-ping');
+  if (el) {
+    el.hidden = false;
+    el.classList.remove('fading');
+  }
+  if (S.map.pingFadeTimer) clearTimeout(S.map.pingFadeTimer);
+  S.map.pingFadeTimer = setTimeout(() => {
+    S.map.pingFadeTimer = 0;
+    if (el) el.classList.add('fading');
+  }, Math.max(0, duration - 450));
   if (S.map.pingTimer) clearTimeout(S.map.pingTimer);
   S.map.pingTimer = setTimeout(() => {
     S.map.pingTimer = 0;
     S.map.pingUntil = 0;
-    const el = $('#player-ping');
-    if (el) el.hidden = true;
+    if (el) { el.hidden = true; el.classList.remove('fading'); }
   }, duration);
   requestDraw();
 }
@@ -2229,8 +2256,10 @@ function drawMap() {
     pts.push({ x: x, sx: sx, sy: sy });
   }
   pts.sort((a, b) => (b.x.state - a.x.state) || (a.x.item.id === S.map.sel ? 1 : 0) - (b.x.item.id === S.map.sel ? 1 : 0));
+  S.map.hitPoints = pts;
   const base = clamp(3.2 + Math.log2(S.map.zoom + 1) * 1.7, 3, 10);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
+  drawMapLabels(ctx, pts, w, h);
   drawSources(ctx, w, h, pr);
   drawMedallions(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
@@ -2423,6 +2452,43 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   ctx.restore();
   if (selected) markerRing(ctx, x, y, r + 5);
 }
+function drawMapLabels(ctx, pts, w, h) {
+  const size = clamp(14 + Math.log2(S.map.zoom + 3) * 3.2, 17, 34);
+  const labels = pts.filter((p) => {
+    const min = MAP_LABEL_MIN_ZOOM[p.x.item.cat];
+    return min !== undefined && S.map.zoom >= min;
+  }).sort((a, b) => (MAP_LABEL_PRIORITY[a.x.item.cat] ?? 99) - (MAP_LABEL_PRIORITY[b.x.item.cat] ?? 99));
+  if (!labels.length) return;
+  const placed = [];
+  ctx.save();
+  ctx.font = '600 11.5px "Segoe UI", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  for (const p of labels) {
+    if (p.sx < -size || p.sx > w + size || p.sy < -size || p.sy > h + size) continue;
+    const text = String(p.x.item.name || '').slice(0, 42);
+    if (!text) continue;
+    const tw = ctx.measureText(text).width;
+    let lx = p.sx + size * 0.55 + 4;
+    if (lx + tw > w - 8) lx = p.sx - size * 0.55 - 4 - tw;
+    if (lx < 6) lx = p.sx + size * 0.55 + 4;
+    if (lx < 4 || lx + tw > w - 6) continue;
+    let ly = p.sy + 2;
+    if (ly < 12) ly = 12;
+    if (ly > h - 8) ly = h - 8;
+    const box = { x: lx - 2, y: ly - 8, w: tw + 4, h: 16 };
+    if (placed.some((r) => !(box.x + box.w < r.x || box.x > r.x + r.w ||
+                             box.y + box.h < r.y || box.y > r.y + r.h))) continue;
+    placed.push(box);
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = 'rgba(3,7,10,.92)';
+    ctx.strokeText(text, lx, ly);
+    ctx.fillStyle = 'rgba(255,244,212,.94)';
+    ctx.fillText(text, lx, ly);
+  }
+  ctx.restore();
+}
+
 function drawSources(ctx, w, h, pr) {
   if (!S.map.sources.length || !S.map.sourceMat) return;
   const iconKey = 'source:' + S.map.sourceMat;
@@ -2516,6 +2582,50 @@ function drawPlayer(ctx, x, y) {
   ctx.moveTo(0, -11); ctx.lineTo(8, 8); ctx.lineTo(0, 4); ctx.lineTo(-8, 8); ctx.closePath();
   ctx.fill(); ctx.stroke();
   ctx.restore();
+}
+function hideMapTooltip() {
+  const tip = $('#map-tooltip');
+  if (tip) tip.hidden = true;
+  const vp = $('#map-viewport');
+  if (vp) vp.style.cursor = 'crosshair';
+}
+function markerAt(clientX, clientY) {
+  const vp = $('#map-viewport');
+  if (!vp) return null;
+  const rect = vp.getBoundingClientRect();
+  const mx = clientX - rect.left, my = clientY - rect.top;
+  let best = null, bd = 13;
+  for (const p of (S.map.hitPoints || [])) {
+    const d = Math.hypot(p.sx - mx, p.sy - my);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+function updateMapHover(clientX, clientY, target) {
+  const vp = $('#map-viewport');
+  const tip = $('#map-tooltip');
+  if (!vp || !tip) return;
+  if (target && target !== vp && target.closest &&
+      target.closest('.map-zoom, .minimap, button, input, select, label')) {
+    hideMapTooltip();
+    return;
+  }
+  const hit = markerAt(clientX, clientY);
+  if (!hit) { hideMapTooltip(); return; }
+  const item = hit.x.item;
+  const meta = catMeta(item.cat);
+  const state = meta.map_only ? '' : hit.x.state >= 2 ? 'Complete' : hit.x.state === 1 ? 'Started' : 'Missing';
+  const layer = item.layer !== S.map.layer ? layerLabel(item.layer) : '';
+  tip.innerHTML = `<b>${esc(item.name)}</b><small>${esc([meta.label, state, layer].filter(Boolean).join(' · '))}</small>`;
+  tip.hidden = false;
+  tip.style.left = '0px'; tip.style.top = '0px';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = clientX + 14, y = clientY + 16;
+  if (x + tw > window.innerWidth - 8) x = clientX - tw - 14;
+  if (y + th > window.innerHeight - 8) y = clientY - th - 12;
+  tip.style.left = `${Math.max(6, x)}px`;
+  tip.style.top = `${Math.max(6, y)}px`;
+  vp.style.cursor = 'pointer';
 }
 function mapHitTest(clientX, clientY) {
   const vp = $('#map-viewport');
@@ -2640,10 +2750,10 @@ function renderProgress() {
     const meta = catMeta(x.item.cat);
     const state = x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
     const iconFile = mapIconFile(x.item.cat, x.state);
-    return `<div class="prow${x.state >= 2 ? ' found' : x.state === 1 ? ' started' : ''}">` +
+    return `<button class="prow${x.state >= 2 ? ' found' : x.state === 1 ? ' started' : ''}" data-midx="${x.index}">` +
       (iconFile ? `<img class="pico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
       `<span class="pi"><span class="pn">${esc(x.item.name)}</span><span class="pm">${layerLabel(x.item.layer)}${d !== null ? ` · ${fmtDist(d)}` : ''}</span></span>` +
-      `<span class="pd">${state}</span><button class="go" data-midx="${x.index}">Map</button></div>`;
+      `<span class="pd">${state}</span></button>`;
   }).join('') : `<div class="empty"><b>Nothing here</b>No places match this filter.</div>`;
 }
 
@@ -2960,6 +3070,7 @@ function attachStatic() {
     !!target.closest('.map-zoom, .minimap, button, input, select, label');
   vp.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || ignoreMapDrag(e.target)) return;
+    hideMapTooltip();
     S.map.drag = { x: e.clientX, y: e.clientY, tx: S.map.tx, ty: S.map.ty, moved: false };
     vp.classList.add('grabbing');
     try { vp.setPointerCapture(e.pointerId); } catch (err) {}
@@ -2967,7 +3078,8 @@ function attachStatic() {
   vp.addEventListener('pointermove', (e) => {
     updateMapCoords(e.clientX, e.clientY);
     const d = S.map.drag;
-    if (!d) return;
+    if (!d) { updateMapHover(e.clientX, e.clientY, e.target); return; }
+    hideMapTooltip();
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     S.map.tx = d.tx + dx; S.map.ty = d.ty + dy;
@@ -2976,6 +3088,7 @@ function attachStatic() {
   vp.addEventListener('pointerleave', () => {
     const el = $('#map-coords');
     if (el) el.hidden = true;
+    hideMapTooltip();
   });
   const endDrag = (e) => {
     const d = S.map.drag;
@@ -2984,20 +3097,22 @@ function attachStatic() {
     if (d && !d.moved) mapHitTest(e.clientX, e.clientY);
   };
   vp.addEventListener('pointerup', endDrag);
-  vp.addEventListener('pointercancel', () => { S.map.drag = null; vp.classList.remove('grabbing'); });
+  vp.addEventListener('pointercancel', () => { S.map.drag = null; vp.classList.remove('grabbing'); hideMapTooltip(); });
   // Older WebKitGTK builds expose mouse events even when PointerEvent is
   // missing. Keep map panning and marker clicks working there too.
   if (!('PointerEvent' in window)) {
     vp.addEventListener('mousedown', (e) => {
       if (e.button !== 0 || ignoreMapDrag(e.target)) return;
       e.preventDefault();
+      hideMapTooltip();
       S.map.drag = { x: e.clientX, y: e.clientY, tx: S.map.tx, ty: S.map.ty, moved: false };
       vp.classList.add('grabbing');
     });
     window.addEventListener('mousemove', (e) => {
       if (vp.contains(e.target)) updateMapCoords(e.clientX, e.clientY);
       const d = S.map.drag;
-      if (!d) return;
+      if (!d) { if (vp.contains(e.target)) updateMapHover(e.clientX, e.clientY, e.target); return; }
+      hideMapTooltip();
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
       S.map.tx = d.tx + dx; S.map.ty = d.ty + dy;
@@ -3007,9 +3122,10 @@ function attachStatic() {
   }
   vp.addEventListener('wheel', (e) => {
     e.preventDefault();
+    hideMapTooltip();
     zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
   }, { passive: false });
-  vp.addEventListener('dblclick', (e) => { e.preventDefault(); zoomAt(1.6, e.clientX, e.clientY); });
+  vp.addEventListener('dblclick', (e) => { e.preventDefault(); hideMapTooltip(); zoomAt(1.6, e.clientX, e.clientY); });
   $('#map-zoomin').addEventListener('click', () => zoomAt(1.45));
   $('#map-zoomout').addEventListener('click', () => zoomAt(1 / 1.45));
   $('#map-fit').addEventListener('click', () => { if (fitMap()) S.map.fitted = true; });
