@@ -47,6 +47,32 @@ SLOTS = ('Head', 'Upper', 'Lower')
 SLOT_ORDER = {'Head': 0, 'Upper': 1, 'Lower': 2}
 SLOT_WORD = {'Head': 'Head', 'Upper': 'Body', 'Lower': 'Legs'}
 
+# Armor effect types without a row in StaticMsg/Buff.msbt. The names follow
+# the effect wording used by the armor screen and the armor captions.
+EFFECT_NAME_OVERRIDES = {
+    'AttackUpBone': 'Attack Up (Bone)',
+    'ClimbWaterfall': 'Waterfall Climbing',
+    'ClimbSpeedUpOnlyHorizontaly': 'Climb Speed Up (Horizontal)',
+    'EmitTerror': 'Terror',
+    'EnableUseSwordBeam': 'Master Sword Beam Up',
+    'MaskAll': 'Monster Disguise',
+    'MaskBokoblin': 'Bokoblin Disguise',
+    'MaskHorablin': 'Horriblin Disguise',
+    'MaskLizalfos': 'Lizalfos Disguise',
+    'MaskLynel': 'Lynel Disguise',
+    'MaskMoriblin': 'Moblin Disguise',
+    'Moisturizing': 'Moisturizing',
+    'NightGlow': 'Glow',
+    'SoulPowerUpFire': 'Sage of Fire Power Up',
+    'SoulPowerUpLightning': 'Sage of Lightning Power Up',
+    'SoulPowerUpSpirit': 'Sage of Spirit Power Up',
+    'SoulPowerUpWater': 'Sage of Water Power Up',
+    'SoulPowerUpWind': 'Sage of Wind Power Up',
+    'SpinAttack': 'Spin Attack',
+    'WakeWind': 'Wind Wake',
+    'YigaDisguise': 'Yiga Disguise',
+}
+
 CATEGORIES = {
     'shrines': {'label': 'Shrines', 'color': '#7fd0ff', 'icon': 'shrine', 'kind': 'shrine'},
     'lightroots': {'label': 'Lightroots', 'color': '#c79bff', 'icon': 'lightroot', 'kind': 'lightroot'},
@@ -173,9 +199,17 @@ def prettify(name):
 
 
 def pick_tile_suffix(entries):
-    """Pick the most complete all-terrain tile variant for one map cell."""
+    """Pick the most complete all-terrain tile variant for one map cell.
+
+    Sky cells can carry a second suffix pair (T_A_A, T_A_B, ...). The shorter
+    T_A/T_B variants are foreground-only cutouts with an opaque brown backing;
+    the doubled variants include the sky and cloud background. Prefer the
+    doubled suffix, then the single suffix, then the plain variant.
+    """
     for n in (4, 3, 2, 1):
-        for suffix in ('T' * n + '_A', 'T' * n + '_B', 'T' * n):
+        base = 'T' * n
+        for suffix in (base + '_A_A', base + '_A_B', base + '_B_A', base + '_B_B',
+                       base + '_A', base + '_B', base):
             if suffix in entries:
                 return suffix
     return None
@@ -258,6 +292,7 @@ class Builder:
         self.pb_text = self._msbt('ActorMsg/PictureBook.msbt')
         self.location_text = self._msbt('LocationMsg/Location.msbt')
         self.dungeon_text = self._msbt('LocationMsg/Dungeon.msbt')
+        self.buff_text = self._msbt('StaticMsg/Buff.msbt')
         self.icons_have = {
             p[len('UI/Tex/Icon/'):-len('.bntx.zs')]: p
             for p in self.rf.files if p.startswith('UI/Tex/Icon/') and p.endswith('.bntx.zs')
@@ -339,8 +374,36 @@ class Builder:
                            if row.get('ActorName')}
         self.enhancement = {basename(row['__RowId']): row for row in
                             byml.Byml(self.rf.read(self.rf.find('RSDB/EnhancementMaterialInfo.', '.byml.zs'))).root}
+        self.series_effects = {}
+        series_path = ('GameParameter/SeriesArmorEffectParamList/'
+                       'Default.game__equipment__SeriesArmorEffectParamList.bgyml')
+        if series_path in self.rf.files:
+            try:
+                root = byml.Byml(self.rf.read(series_path)).root
+                self.series_effects = {
+                    row.get('SeriesName'): row.get('ArmorEffect', [])
+                    for row in root.get('SeriesArmorEffectList', [])
+                    if row.get('SeriesName')
+                }
+            except Exception:
+                self.series_effects = {}
 
     # --- weapons and armor ----------------------------------------------------
+
+    def effect_info(self, effects, set_bonus=False):
+        """Turn raw ArmorEffect rows into display names and levels."""
+        out = []
+        for effect in effects or []:
+            kind = effect.get('ArmorEffectType')
+            if not kind:
+                continue
+            key = ('SetBonus_' + kind) if set_bonus else kind
+            name = (self.buff_text.get(key) or self.buff_text.get(kind)
+                    or EFFECT_NAME_OVERRIDES.get(kind)
+                    or re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', kind))
+            level = int(effect.get('ArmorEffectLevel') or 0)
+            out.append({'type': kind, 'name': name, 'level': level, 'set': bool(set_bonus)})
+        return out
 
     def _actor_pack(self, actor):
         path = 'Pack/Actor/%s.pack.zs' % actor
@@ -428,7 +491,6 @@ class Builder:
             base = root(actor)
             set_key = base.rsplit('_', 1)[0]
             set_name = row['series'] or self.name(base)
-            sets.setdefault(set_key, set_name)
             row['base'] = base
             row['set_key'] = set_key
             row['set_name'] = set_name
@@ -437,11 +499,19 @@ class Builder:
             row['icon'] = self.icon_for(actor)
             row['rank'] = row['rank']
             row['defense_next'] = self.armor_raw.get(row['next'], {}).get('defense')
+            row['effect_info'] = self.effect_info(row['effects'])
+            row['set_bonus'] = self.effect_info(
+                self.series_effects.get(row['series'], []), set_bonus=True)
+            if set_key not in sets:
+                sets[set_key] = {
+                    'key': set_key, 'name': set_name, 'series': row['series'],
+                    'bonus': row['set_bonus'],
+                }
         catalog = []
         for actor, row in sorted(self.armor_raw.items(), key=lambda kv: (kv[1]['set_key'], SLOT_ORDER.get(kv[1]['slot'], 9), kv[1]['rank'])):
             catalog.append(row)
         self.catalog['armor'] = catalog
-        self.catalog['armor_sets'] = [{'key': k, 'name': v} for k, v in sorted(sets.items(), key=lambda kv: kv[1])]
+        self.catalog['armor_sets'] = sorted(sets.values(), key=lambda x: x['name'])
 
     # --- compendium -----------------------------------------------------------
 

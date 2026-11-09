@@ -608,6 +608,16 @@ function renderArmor() {
   renderArmorDetail(list.find((p) => p.base === sel) || list[0]);
 }
 
+function effectChips(list, cls) {
+  return (list || []).map((e) =>
+    `<span class="tag ${cls || ''}">${esc(e.name)}${e.level > 1 && !e.set ? ` Lv. ${e.level}` : ''}</span>`
+  ).join('');
+}
+
+function slotLabel(slot) {
+  return slot === 'Head' ? 'Head' : slot === 'Upper' ? 'Body' : 'Legs';
+}
+
 function renderArmorDetail(p) {
   const el = $('#armor-detail');
   if (!p) { el.innerHTML = ''; return; }
@@ -629,10 +639,38 @@ function renderArmorDetail(p) {
   else upgradeBlock = `<h3 class="label">${owned ? 'Next upgrade' : 'To upgrade after finding it'}</h3>` +
     `<div class="upg">${rows}</div><div class="grid2"><dt>Defense</dt><dd>${current.defense || 0} → ${nextDef || 0}</dd>` +
     `<dt>Rupees</dt><dd>${fmtNum(current.price)}</dd></div>`;
+
+  const effects = current.effect_info || [];
+  const effectBlock = `<h3 class="label">Effects</h3>` +
+    (effects.length ? `<div class="tagrow">${effectChips(effects, 'eff')}</div>`
+                    : `<p class="note">No special effect on this piece.</p>`);
+
+  const slotOrder = { Head: 0, Upper: 1, Lower: 2 };
+  const setPieces = armorPieces().filter((x) => x.set_key === p.set_key)
+    .sort((a, b) => (slotOrder[a.slot] ?? 9) - (slotOrder[b.slot] ?? 9));
+  const ownedPieces = setPieces.filter((x) => x.owned);
+  const bonus = current.set_bonus || [];
+  const pieceRows = setPieces.map((x) =>
+    `<div class="setpiece"><span class="slot">${slotLabel(x.slot)}</span>` +
+    `<span class="nm">${esc(x.name)}</span>` +
+    `<span class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</span></div>`
+  ).join('');
+  const bonusBlock = bonus.length
+    ? `<div class="setbonus"><div class="sb-head"><span class="tag gold">Set bonus</span>` +
+      `<span class="dim">${ownedPieces.length} of ${setPieces.length} pieces owned</span></div>` +
+      `<div class="tagrow">${effectChips(bonus, 'bonus')}</div>` +
+      `<div class="dim">Applies when the full set is equipped.</div></div>`
+    : `<div class="dim">This set has no set bonus.</div>`;
+  const setBlock = setPieces.length > 1 || bonus.length
+    ? `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
+      pieceRows + bonusBlock + `</div>`
+    : `<h3 class="label">Set</h3><p class="note">This is a standalone piece with no set bonus.</p>`;
+
   el.innerHTML = `<div class="in"><div class="d-head">${art({ icon: p.icon }, 'hero')}<div><h2 class="d-name">${esc(p.name)}</h2>` +
     `<div class="d-sub">${esc(p.set_name || 'Armor')} · ${owned ? `owned, level ${p.owned.rank || 1}` : 'not owned'}</div></div></div>` +
-    `<div class="tagrow"><span class="tag">${p.slot === 'Head' ? 'Head' : p.slot === 'Upper' ? 'Body' : 'Legs'}</span>` +
+    `<div class="tagrow"><span class="tag">${slotLabel(p.slot)}</span>` +
     `<span class="tag">Defense ${current.defense || 0}</span>${owned ? '<span class="tag gold">Owned</span>' : ''}</div>` +
+    effectBlock + setBlock +
     (current.caption ? `<p class="cap">${esc(current.caption)}</p>` : '') +
     `<div class="bar"><i style="width:${((p.owned ? p.owned.rank : 1) / 4) * 100}%"></i></div>` +
     upgradeBlock + `</div>`;
