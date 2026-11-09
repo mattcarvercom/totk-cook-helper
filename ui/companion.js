@@ -2490,6 +2490,16 @@ function drawMedallions(ctx, w, h, pr) {
 }
 
 function drawPlayer(ctx, x, y) {
+  const icon = S.map.iconImages && S.map.iconImages['mapicons/player.webp'];
+  if (icon && icon.complete && icon.naturalWidth) {
+    const size = clamp(16 + Math.log2(S.map.zoom + 3) * 2.6, 18, 34);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.9)';
+    ctx.shadowBlur = 4;
+    ctx.drawImage(icon, x - size / 2, y - size / 2, size, size);
+    ctx.restore();
+    return;
+  }
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = '#fff0c2';

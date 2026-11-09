@@ -1472,14 +1472,14 @@ class Builder:
             img.save(os.path.join(MAPICONS, fname), 'WEBP', quality=90, method=6)
             return 'mapicons/' + fname
 
-        # Shrines use the blue diamond seen on the map, with the three game
-        # states: orange, orange plus blue frame, and fully blue.
-        shrine_fill = decode('Nt_MapDungeonNew_02')
-        shrine_frame = decode('Nt_MapDungeonNewF_01')
-        if shrine_fill is not None:
-            def shrine_icon(fill, frame):
-                return composite_icon(tint_icon(shrine_fill, fill),
-                                      tint_icon(shrine_frame, frame) if shrine_frame is not None else None)
+        # Shrines use the game's gate icon inside its diamond frame. The three
+        # map states are orange, orange plus blue frame, and fully blue.
+        shrine_gate = decode('MapIconDungeon_L_Icon')
+        shrine_frame = decode('MapIconDungeon_L_Frame')
+        if shrine_gate is not None:
+            def shrine_icon(gate_color, frame_color):
+                return composite_icon(tint_icon(shrine_gate, gate_color),
+                                      tint_icon(shrine_frame, frame_color) if shrine_frame is not None else None)
             states['shrines'] = {
                 '0': save_icon('shrines_missing', shrine_icon('#e39a55', '#e39a55')),
                 '1': save_icon('shrines_started', shrine_icon('#e39a55', '#58c8f5')),
@@ -1487,20 +1487,38 @@ class Builder:
             }
             out['shrines'] = states['shrines']['2']
 
-        # The lightroot is a teardrop with a diamond gem; the pause-map ring
-        # texture is only the gem, so build the root silhouette around it.
-        gem = decode('Nt_MapDungeonNewF_01')
-        def lightroot(color):
-            img = make_lightroot_icon(color)
-            if gem is not None:
-                g = tint_icon(gem, '#e2f5ff').resize((34, 34), Image.LANCZOS)
-                img.alpha_composite(g, (31, 14))
-            return img
-        states['lightroots'] = {
-            '0': save_icon('lightroots_missing', lightroot('#6d5a8c')),
-            '2': save_icon('lightroots_done', lightroot('#b98cff')),
-        }
+        # The lightroot map icon is the game's glowing checkpoint bulb. The
+        # inactive state is a dimmed copy so both states still use game art.
+        honor_path = 'UI/Tex/Icon/Obj_CheckPointHonor_00.bntx.zs'
+        honor = None
+        if honor_path in self.rf.files:
+            try:
+                honor = build_icons.decode_bntx(self.rf.read(honor_path)).convert('RGBA')
+            except Exception as e:
+                log('map icons: cannot decode %s: %s' % (honor_path, e))
+        if honor is not None:
+            dim = ImageEnhance.Brightness(ImageEnhance.Color(honor).enhance(0.25)).enhance(0.55)
+            states['lightroots'] = {
+                '0': save_icon('lightroots_missing', dim),
+                '2': save_icon('lightroots_done', honor),
+            }
+        else:
+            gem = decode('Nt_MapDungeonNewF_01')
+            def lightroot(color):
+                img = make_lightroot_icon(color)
+                if gem is not None:
+                    g = tint_icon(gem, '#e2f5ff').resize((34, 34), Image.LANCZOS)
+                    img.alpha_composite(g, (31, 14))
+                return img
+            states['lightroots'] = {
+                '0': save_icon('lightroots_missing', lightroot('#6d5a8c')),
+                '2': save_icon('lightroots_done', lightroot('#b98cff')),
+            }
         out['lightroots'] = states['lightroots']['2']
+
+        player = decode('Nt_MapPlayerIconNew_00')
+        if player is not None:
+            out['player'] = save_icon('player', tint_icon(player, '#fff0c2'))
 
         for cat, source in MAP_ICON_SOURCES.items():
             if cat in ('shrines', 'lightroots'):

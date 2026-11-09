@@ -133,8 +133,9 @@ rather than the pause map's last viewed layer. Layer buttons, marker filters,
 search and the reveal checkbox are in the left pane; zoom buttons float on the
 map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges and landmarks are separate map layers, each with its
-game marker art. Marker images are trimmed to their visible bounds so small
-icons such as wells use the same size on the map. The layer list runs from
+game marker art, including the shrine gate, lightroot bulb, and player arrow.
+Marker images are trimmed to their visible bounds so small icons such as wells
+use the same size on the map. The layer list runs from
 fast travel and major places down to collectibles instead of sorting by marker
 count. **Reveal full map** is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
