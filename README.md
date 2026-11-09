@@ -137,7 +137,11 @@ game marker art, including the shrine gate, lightroot bulb, and player arrow.
 Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list runs from
 fast travel and major places down to collectibles instead of sorting by marker
-count. **Reveal full map** is off by default, so the map starts with the
+count. Shrines, towers, and lightroots ignore the Found/Missing filter and stay
+at full opacity so every fast travel point is visible; the icon color shows its
+state. **Link** centers without changing the zoom, and at fit zoom it only
+pings the marker because the whole map is already visible. **Reveal full map**
+is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
 remain visible over unexplored areas. The Sky layer draws the Hyrule base,
 translucent clouds, then the sky islands on top so the islands stay clear.

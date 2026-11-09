@@ -439,6 +439,7 @@ const MAP_CAT_ORDER = ['shrines', 'towers', 'lightroots', 'stables', 'caves', 'v
                        'sages_wills', 'addison_signposts', 'schema_stones',
                        'yiga_schematics'];
 const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
+const FAST_TRAVEL_CATS = new Set(['shrines', 'towers', 'lightroots']);
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -1650,7 +1651,7 @@ function mapVisible() {
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only) {
+    if (!only && !FAST_TRAVEL_CATS.has(it.cat)) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1669,7 +1670,7 @@ function searchResults() {
     if (it.map_hidden) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only) {
+    if (!only && !FAST_TRAVEL_CATS.has(it.cat)) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1979,7 +1980,7 @@ function renderResultsNote(searching) {
   if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
   if (S.map.found === 'all') { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>` +
+  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only for collectibles · fast travel always shown</span>` +
     '<button data-maprelax="found">Show all types</button>';
 }
 
@@ -2124,7 +2125,13 @@ function centerOnPlayer() {
   const m = cat().map;
   const pr = projection();
   const vp = $('#map-viewport');
-  const z = Math.max(S.map.zoom, 2.2);
+  const z = S.map.zoom;
+  const fitZ = Math.min(vp.clientWidth / m.width, vp.clientHeight / m.height) * 0.98;
+  if (z <= fitZ * 1.02) {
+    showPlayerPing();
+    drawMap();
+    return;
+  }
   S.map.zoom = z;
   S.map.tx = vp.clientWidth / 2 - pr.x(p.x) * z;
   S.map.ty = vp.clientHeight / 2 - pr.y(p.z) * z;
@@ -2360,7 +2367,7 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   const st = xitem.state;
   const iconFile = mapIconFile(it.cat, st);
   const icon = iconFile && S.map.iconImages && S.map.iconImages[iconFile];
-  const alpha = st >= 2 ? 0.30 : st === 1 ? 0.55 : 0.98;
+  const alpha = 1;
   if (icon && icon.complete && icon.naturalWidth) {
     const max = clamp(14 + Math.log2(S.map.zoom + 3) * 3.2, 17, 34);
     const scale = max / Math.max(icon.naturalWidth, icon.naturalHeight);
