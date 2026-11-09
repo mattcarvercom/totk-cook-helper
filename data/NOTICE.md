@@ -19,3 +19,8 @@ or game files are included.
 The companion rebuilds all icons, names, and map tiles from the user's own
 game files at install time. The collectible list and the region polygons are the
 only pre-computed data files, and they are used read-only.
+
+`ui/material/` contains a small subset of
+[Material Symbols](https://fonts.google.com/icons) by Google, licensed under the
+Apache License 2.0. The license text is in `ui/material/LICENSE`. The SVGs are
+vendored locally so the companion never loads icons from a CDN.

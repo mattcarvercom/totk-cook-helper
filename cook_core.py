@@ -32,6 +32,13 @@ PREFIX = {
 SKIP_RESULTS ={'Item_Cook_O_01', 'Item_Cook_O_02'}  # Dubious Food, Rock-Hard Food
 MAX_POT = 5
 COMBO_CAP = 4000
+TAG_LABELS = {
+    'CookMeat': 'Any meat', 'CookFish': 'Any fish', 'CookMushroom': 'Any mushroom',
+    'CookFruit': 'Any fruit', 'CookPlant': 'Any plant', 'CookSpice': 'Any spice',
+    'CookInsect': 'Any critter', 'CookEnemy': 'Any monster part',
+    'CookGolem': 'Any construct part', 'CookOre': 'Any ore',
+    'CookForeign': 'Any fuse material',
+}
 
 
 def murmur3(key, seed=0):
@@ -183,6 +190,128 @@ class Cook:
                 pot.append(k)
                 left[k] -= 1
         return pot
+
+    def part_label(self, part):
+        labels = []
+        for kind, value in part:
+            if kind == 'Tag':
+                labels.append(TAG_LABELS.get(value, value))
+            else:
+                labels.append(self.name(value))
+        return ' or '.join(labels)
+
+    def _part_candidates(self, part, effect):
+        # Neutral ingredients are valid filler in any effect recipe. The
+        # effect comes from at least one part, not every part.
+        wanted = {None} if effect is None else {effect, None}
+        out = []
+        for kind, value in part:
+            if kind == 'Actor':
+                m = self.mat.get(value)
+                mat_effect = m.get('effect') if m else None
+                if mat_effect in (None, 'None'):
+                    mat_effect = None
+                if m and mat_effect in wanted:
+                    out.append(value)
+            else:
+                for actor, m in self.mat.items():
+                    mat_effect = m.get('effect')
+                    if mat_effect in (None, 'None'):
+                        mat_effect = None
+                    if value in (m.get('tags') or []) and mat_effect in wanted:
+                        out.append(actor)
+        seen = set()
+        unique = []
+        for actor in out:
+            if actor in seen:
+                continue
+            seen.add(actor)
+            unique.append(actor)
+        unique.sort(key=lambda a: (-(self.mat[a].get('level') or 0),
+                                   -(self.mat[a].get('hp') or 0),
+                                   self.name(a).lower()))
+        return unique
+
+    def _can_cook(self, parts, effect, inv):
+        options = []
+        for part in parts:
+            opts = [a for a in self._part_candidates(part, effect) if inv.get(a, 0) > 0]
+            if not opts:
+                return False
+            options.append(opts)
+        options.sort(key=len)
+        used = {}
+
+        def place(i):
+            if i >= len(options):
+                return True
+            for actor in options[i]:
+                if used.get(actor, 0) >= inv.get(actor, 0):
+                    continue
+                used[actor] = used.get(actor, 0) + 1
+                if place(i + 1):
+                    return True
+                used[actor] -= 1
+            return False
+
+        return place(0)
+
+    def all_recipes(self, inv):
+        """Every dish and effect variant the recipe table can produce.
+
+        Each row uses one representative ingredient per recipe slot. Rows are
+        keyed by dish and effect, so an ingredient change that only alters the
+        effect still appears as its own recipe.
+        """
+        effects = [None]
+        for effect in self.effects:
+            if effect not in ('None', 'LifeRecover') and effect not in effects:
+                effects.append(effect)
+        best = {}
+        for recipe in self.recipes:
+            result = recipe['result']
+            if result in SKIP_RESULTS:
+                continue
+            base = self.dish_names.get(result, result)
+            for effect in effects:
+                candidates = []
+                ok = True
+                for part in recipe['parts']:
+                    cands = self._part_candidates(part, effect)
+                    if not cands:
+                        ok = False
+                        break
+                    candidates.append(cands)
+                if not ok:
+                    continue
+                pot = [cands[0] for cands in candidates]
+                stats = self.stats(pot, recipe)
+                if (stats['effect'] or None) != effect:
+                    continue
+                key = result + '|' + (effect or 'None')
+                score = (-len(recipe['parts']), stats['level'], stats['hearts'])
+                row = {
+                    'dish': result,
+                    'name': self.display_name({'name': base, 'effect': effect}),
+                    'effect': effect,
+                    'level': stats['level'],
+                    'hearts': stats['hearts'],
+                    'extra': stats['extra_hearts'],
+                    'seconds': stats['seconds'],
+                    'mixed': False,
+                    'pot': pot,
+                    'size': len(recipe['parts']),
+                    'req': [self.part_label(part) for part in recipe['parts']],
+                    'missing': [self.part_label(part) for part in recipe['parts']
+                                if not any(inv.get(a, 0) > 0
+                                           for a in self._part_candidates(part, effect))],
+                    'cookable': self._can_cook(recipe['parts'], effect, inv),
+                }
+                if key not in best or score > best[key][0]:
+                    best[key] = (score, row)
+        rows = [entry[1] for entry in best.values()]
+        rows.sort(key=lambda x: (x['name'].lower(), x['effect'] or ''))
+        return rows
 
     def what_can_i_cook(self, inv):
         """One row per dish: the smallest set of ingredient kinds that makes it, best by effect then hearts."""

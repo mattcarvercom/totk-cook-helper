@@ -191,6 +191,30 @@ def build_cooking(inv, cook, catalog):
     return {'dishes': dishes, 'materials': mats}
 
 
+def build_all_recipes(inv, cook, catalog):
+    materials = {x['actor']: x['count'] for x in inv.get('materials', [])}
+    out = []
+    for row in cook.all_recipes(materials):
+        pot = []
+        for actor in row['pot']:
+            m = cook.mat.get(actor, {})
+            pot.append({'actor': actor, 'name': cook.name(actor), 'n': 1,
+                        'glyph': glyph(m),
+                        'icon': actor_entry(catalog, actor).get('icon'),
+                        'effect': m.get('effect') or 'None'})
+        out.append({
+            'id': row['dish'] + '|' + (row['effect'] or 'None'),
+            'name': row['name'], 'hearts': row['hearts'], 'extra': row['extra'],
+            'effect': row['effect'] or '', 'effect_name': cc.EFFECT_NAMES.get(row['effect'] or 'None', ''),
+            'seconds': row['seconds'], 'mixed': False, 'level': row['level'],
+            'glyph': 'elixir' if 'Elixir' in row['name'] else (pot[0]['glyph'] if pot else 'pouch'),
+            'icon': actor_entry(catalog, row['dish']).get('icon'), 'pot': pot, 'size': row['size'],
+            'req': row['req'], 'missing': row['missing'], 'cookable': row['cookable'],
+            'all': True,
+        })
+    return out
+
+
 class Api:
     def __init__(self, app):
         self._app = app
@@ -201,6 +225,12 @@ class Api:
     def state(self, version):
         a = self._app
         return a.payload if a.payload and a.payload['version'] != version else None
+
+    def hero_path(self):
+        return self._app.hero_path()
+
+    def all_recipes(self):
+        return self._app.all_recipes()
 
     def set_setting(self, key, value):
         self._app.set_setting(key, value)
@@ -239,6 +269,8 @@ class App:
         self.save_path = self.save_mtime = None
         self.error = None
         self.checking = False
+        self._all_recipes = None
+        self._all_recipes_for = None
         self.poll_s = max(MIN_POLL_S, float(poll_s))
         self.next_scan = time.time() + self.poll_s
         self.closing = False
@@ -308,6 +340,22 @@ class App:
                 pass
         save_settings(self.s)
         self.push()
+
+    # --- lazy data ------------------------------------------------------------
+
+    def hero_path(self):
+        return self.save.hero_path() if self.save else None
+
+    def all_recipes(self):
+        if not self.save:
+            return []
+        key = (self.save_path, self.data_version)
+        if self._all_recipes is not None and self._all_recipes_for == key:
+            return self._all_recipes
+        inv = self.save.inventory()
+        self._all_recipes = build_all_recipes(inv, self.cook, self.catalog)
+        self._all_recipes_for = key
+        return self._all_recipes
 
     # --- save selection -------------------------------------------------------
 
@@ -490,7 +538,8 @@ def main(argv=None):
         print(json.dumps({
             'game': game, 'save': app.save_path, 'slot': p['save']['slot'],
             'hearts': p['status']['hearts'], 'rupees': p['status']['rupees'],
-            'position': p['status']['position'],
+            'position': p['status']['position'], 'playtime': p['status'].get('playtime'),
+            'deaths': p['status'].get('deaths'), 'path_distance': p['status'].get('path_distance'),
             'inventory': {k: len(v['items']) for k, v in
                           ((x['key'], x) for x in p['inventory'])},
             'completion': p['completion']['totals'],

@@ -4,6 +4,16 @@
 html, body { height: 100%; }
 body { overflow: hidden; }
 
+.fxchip .chipico { width: 15px; height: 15px; flex: none; object-fit: contain; }
+
+/* Material Symbols, vendored locally under ui/material. */
+.msi {
+  display: inline-block; width: 18px; height: 18px; flex: none; vertical-align: -4px;
+  fill: currentColor; stroke: none;
+}
+.msi.sm { width: 15px; height: 15px; vertical-align: -3px; }
+.msi.lg { width: 22px; height: 22px; vertical-align: -5px; }
+
 .app {
   position: relative;
   height: 100vh;
@@ -182,6 +192,12 @@ body { overflow: hidden; }
   position: absolute; left: 7px; bottom: 6px; padding: 1px 5px; border-radius: 4px;
   font: 500 11px/1.3 var(--ui); color: var(--gold-hi); background: rgba(10,15,13,.8); border: 1px solid var(--line);
 }
+.cell .stamcard { position: absolute; left: 6px; bottom: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: rgba(10,15,13,.7); border: 1px solid rgba(155,212,111,.3); }
+.cell .stamcard .wheel { width: 18px; height: 18px; }
+.cell .resists { position: absolute; top: 5px; left: 5px; display: flex; gap: 2px; padding: 2px 3px; border-radius: 6px; background: rgba(6,10,13,.72); border: 1px solid var(--line-soft); color: var(--gold-hi); }
+.cell .resists .msi { width: 13px; height: 13px; vertical-align: 0; }
+.d-head .resists { display: inline-flex; gap: 4px; margin-left: 2px; padding: 3px 5px; border-radius: 7px; border: 1px solid var(--line-soft); color: var(--gold-hi); background: rgba(6,10,13,.4); vertical-align: 4px; }
+.d-head .resists .msi { width: 17px; height: 17px; vertical-align: 0; }
 .cell.has-dur { padding-bottom: 20px; }
 .cell .dur { position: absolute; left: 8px; right: 8px; bottom: 6px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
 .cell .dur > i { display: block; height: 100%; background: var(--gold); }
@@ -199,14 +215,14 @@ body { overflow: hidden; }
 .comp-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
 .comp-grid .cell { min-height: 108px; }
 .comp-grid .cell img.g { width: 54px; height: 54px; }
-.comp-state { position: absolute; top: 5px; right: 6px; font: 500 10.5px/1 var(--ui); letter-spacing: .03em; color: var(--faint); text-transform: uppercase; }
-.comp-state.photo { color: #9bd47a; }
-.comp-state.buy { color: #7fc7e8; }
 .comp-cell.unopened img.g { filter: grayscale(.9) brightness(.55) drop-shadow(0 4px 5px rgba(0,0,0,.55)); }
 .comp-cell.unopened .nm { color: var(--faint); }
 
 /* ---------- detail extras ---------- */
 .detail .tagrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.fxnotes { display: grid; gap: 3px; margin: -3px 0 10px; color: var(--dim); font-size: 12px; line-height: 1.35; }
+.fxnotes .fxnote b { color: var(--gold); font-weight: 500; }
+.fxnotes .fxnote span { color: var(--faint); }
 .tag { padding: 3px 8px; border-radius: 11px; border: 1px solid var(--line-soft); color: var(--dim); font-size: 12.5px; }
 .tag.gold { color: var(--gold); border-color: var(--line); }
 .tag.eff { color: #9bd4a8; border-color: rgba(155, 212, 168, .35); }
@@ -292,8 +308,15 @@ body { overflow: hidden; }
 .map-cat-actions { display: flex; gap: 5px; margin: -4px 0 8px; }
 .map-cat-actions button { flex: 1; padding: 5px 7px; border: 1px solid var(--line-soft); border-radius: 6px; color: var(--dim); font-size: 12px; }
 .map-cat-actions button:hover { border-color: var(--line-strong); color: var(--gold-hi); background: rgba(214,196,140,.06); }
-.map-reveal { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: var(--dim); font-size: 12.5px; cursor: pointer; }
+.map-reveal { display: flex; align-items: center; gap: 7px; margin: 0 0 8px; color: var(--dim); font-size: 12.5px; cursor: pointer; }
 .map-reveal input { accent-color: var(--gold); }
+.map-path-note { margin: -2px 0 9px; padding: 5px 7px; border: 1px solid var(--line-soft); border-radius: 6px; color: var(--faint); font-size: 11.5px; line-height: 1.35; }
+.map-path-note[hidden] { display: none; }
+.map-cat-actions button, .map-left .seg button, .map-zoom .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+}
+.map-cat-actions button .msi, .map-left .seg button .msi { width: 15px; height: 15px; vertical-align: -3px; }
+.map-cat-actions button.icon-only { font-size: 0; gap: 0; }
 .map-results-note { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: -6px 0 9px; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: rgba(214,196,140,.05); color: var(--faint); font-size: 11.5px; }
 .map-results-note[hidden], .nearby[hidden], .map-detail[hidden], #map-near-title[hidden] { display: none !important; }
 .map-results-note b { color: var(--gold); }
@@ -396,6 +419,17 @@ body { overflow: hidden; }
 .statusline .hint { color: var(--faint); }
 .statusline .warn { color: var(--gold); }
 .statusline .spin { display: inline-block; width: 10px; height: 10px; margin: 0 6px 1px 0; border: 2px solid var(--line); border-top-color: var(--gold-hi); border-radius: 50%; animation: cook-spin .8s linear infinite; vertical-align: -1px; }
+
+/* Stack filter rows before they crush the search field. The wide layout keeps
+   the chips and search on one line. */
+@media (max-width: 1300px) {
+  .toolbar, .progress-controls { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+  .toolbar .toolright, .progress-controls .toolright { order: 1; width: 100%; margin-left: 0; }
+  .toolbar > .filter, .progress-controls .filter { order: 1; flex: 0 0 auto; width: 100%; max-width: none; height: 32px; }
+  .toolbar > .chips, .progress-controls > .chips { order: 2; flex: 0 0 auto; width: 100%; }
+  .toolbar .toolright .filter, .progress-controls .toolright .filter { flex: 1 1 220px; width: auto; max-width: none; }
+  .toolright .select { max-width: none; }
+}
 
 /* ---------- narrow ---------- */
 @media (max-width: 1100px) {

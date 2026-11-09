@@ -15,13 +15,14 @@ const S = {
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
-         reveal: false, medals: true, fitted: false, layerSet: false, pending: null, raf: 0, drag: null,
+         reveal: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
+         fitted: false, layerSet: false, pending: null, raf: 0, drag: null,
          iconImages: {}, activeReveal: null, activeRevealFor: null,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
          miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'found', filter: '' },
   comp: { group: '', state: 'TakePhoto', filter: '', sel: null },
-  cook: { filter: '', fx: '', sort: 'hearts', sel: null },
+  cook: { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1 },
   modal: false,
   sourceModal: false,
   sourceActor: null,
@@ -66,6 +67,72 @@ const FX = {
   NotSlippy: '#b9c66d', MiasmaGuard: '#cf94e2', SwimSpeedUp: '#62b9e2', SnowMoveUp: '#c7e3f0', SandMoveUp: '#e3c48e',
   ClimbSpeedUp: '#a6cf7a', DivingMobilityUp: '#8fd0d8',
 };
+const EFFECT_DESC = {
+  AttackUp: 'Raises attack power by 20% at Lv. 1, 30% at Lv. 2, and 50% at Lv. 3.',
+  AttackUpCold: 'Adds ice damage to charge attacks and combo finishers in cold weather.',
+  AttackUpHot: 'Adds fire damage to charge attacks and combo finishers in hot weather.',
+  AttackUpThunderstorm: 'Adds electric damage to charge attacks and combo finishers in storms.',
+  AttackUpBone: 'Bone weapons deal 80% more damage.',
+  DefenseUp: 'Adds 4 defense at Lv. 1, 12 at Lv. 2, and 24 at Lv. 3.',
+  ResistCold: 'Endures cold down to -10 C at Lv. 1, and any cold at Lv. 2.',
+  ResistHot: 'Endures heat up to 50 C at Lv. 1, and any heat at Lv. 2.',
+  ResistElectric: 'Takes one third less shock damage at Lv. 1, two thirds less at Lv. 2, and none at Lv. 3.',
+  ResistBurn: 'Endures some scorching heat at Lv. 1, and any scorching heat at Lv. 2.',
+  ResistFreeze: 'Prevents ice damage and being frozen.',
+  ResitLightning: 'Prevents lightning damage and knockback.',
+  NoBurning: 'Prevents fire damage and catching fire.',
+  MiasmaGuard: 'Reduces gloom damage by 1 heart per level.',
+  MiasmaDefenseUp: 'Blocks 4 gloom hearts.',
+  AllSpeed: 'Move 10% faster at Lv. 1, 20% at Lv. 2, and 30% at Lv. 3.',
+  QuietnessUp: 'Produces 20% less sound at Lv. 1, 40% at Lv. 2, and 70% at Lv. 3.',
+  SwimSpeedUp: 'Swims 30% faster at Lv. 1, 60% at Lv. 2, and twice as fast at Lv. 3.',
+  ClimbSpeedUp: 'Climbs 20% faster at Lv. 1, 30% at Lv. 2, and 40% at Lv. 3.',
+  ClimbSpeedUpOnlyHorizontaly: 'Climbs 70% faster horizontally.',
+  ClimbWaterfall: 'Allows swimming up waterfalls.',
+  DivingMobilityUp: 'Improves skydive mobility.',
+  SandMoveUp: 'Moves at normal speed on sand.',
+  SnowMoveUp: 'Moves at normal speed on snow.',
+  NotSlippy: 'Never slips while climbing in rain or on ice.',
+  NightMoveSpeedUp: 'Moves 20% faster at night.',
+  LightEmission: 'Glows in the dark.',
+  LightFootprint: 'Leaves glowing footprints in the Depths every 5 seconds.',
+  DecreaseSwimStamina: 'Uses 75% less stamina for swim dashes.',
+  DecreaseWallJumpStamina: 'Uses 50% less stamina for climbing jumps.',
+  DecreaseChargeAttackStamina: 'Uses 50% less stamina for charge attacks.',
+  ChargePowerUpCold: 'Charge attacks charge twice as fast in cold weather.',
+  ChargePowerUpHot: 'Charge attacks charge twice as fast in hot weather.',
+  ChargePowerUpThunderstorm: 'Charge attacks charge twice as fast in storms.',
+  ZonauEnergyHealUp: 'Zonai devices recover energy 50% faster.',
+  NoFallDamage: 'Prevents fall damage.',
+  SwordBeamUp: 'Master Sword beams deal 50% more damage.',
+  StalDisguise: 'Stal enemies do not appear at night and Stalnox ignore Link.',
+  EmitTerror: 'Terrifies NPCs.',
+  EnableUseSwordBeam: 'Allows Master Sword beams without full hearts.',
+  SpinAttack: 'Allows a spin attack while swimming.',
+  Moisturizing: 'Keeps Link wet for longer after touching water.',
+  RupeeGuard: 'Converts damage into rupees.',
+  RupeeGuardRate: 'Converts damage into rupees.',
+  MaskBokoblin: 'Bokoblins do not attack unless provoked.',
+  MaskMoriblin: 'Moblins do not attack unless provoked.',
+  MaskLizalfos: 'Lizalfos do not attack unless provoked.',
+  MaskLynel: 'Lynels ignore Link at close range for 30 seconds.',
+  MaskHorablin: 'Horriblins do not attack unless provoked.',
+  MaskAll: 'Monsters do not attack unless provoked.',
+  DecreaseZonauEnergy: 'Zonai devices use less energy.',
+  NightGlow: 'Glows at night.',
+  NoSlip: 'Never slips while climbing in rain or on ice.',
+  SoulPowerUpFire: "Increases Yunobo's attack power.",
+  SoulPowerUpLightning: "Increases Riju's attack power.",
+  SoulPowerUpSpirit: "Increases Mineru's attack power.",
+  SoulPowerUpWater: "Increases Sidon's attack power.",
+  SoulPowerUpWind: "Increases Tulin's attack power.",
+  WakeWind: "Improves Tulin's gust.",
+  YigaDisguise: 'Yiga Clan members do not attack.',
+};
+function effectDesc(effect) {
+  return EFFECT_DESC[(effect && effect.type) || effect] || '';
+}
+
 const MARKS = {
   AllSpeed: ['M8.6 9l3 3-3 3M12.2 9l3 3-3 3', 0], SwimSpeedUp: ['M8.6 9l3 3-3 3M12.2 9l3 3-3 3', 0],
   ClimbSpeedUp: ['M8.6 9l3 3-3 3M12.2 9l3 3-3 3', 0], SnowMoveUp: ['M8.6 9l3 3-3 3M12.2 9l3 3-3 3', 0],
@@ -92,6 +159,17 @@ const MARKS = {
 function icon(name, cls, color) {
   const st = color ? ` style="--fxc:${color}"` : '';
   return `<svg class="${cls || 'g'}" viewBox="0 0 24 24" aria-hidden="true"${st}>${ICONS[name] || ICONS.pouch}</svg>`;
+}
+function micon(name, title, cls) {
+  const label = title ? ` title="${esc(title)}"` : '';
+  const body = (window.MATERIAL_ICONS || {})[name] || '';
+  return `<svg class="msi ${cls || ''}"${label} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" style="stroke:none">${body}</svg>`;
+}
+function initStaticIcons() {
+  for (const el of $$('[data-micon]')) {
+    const cls = el.className.replace(/\bmsi\b/g, '').trim();
+    el.outerHTML = micon(el.dataset.micon, '', cls);
+  }
 }
 function art(it, cls) {
   cls = cls || 'g';
@@ -161,6 +239,27 @@ function fmtXYZ(x, y, z) {
 }
 function fmtXZ(x, z) {
   return `X ${gameCoord(x)} · Y ${gameCoord(-z)}`;
+}
+const HEIGHT_CACHE = {};
+function heightLayer(layer) {
+  const all = window.MAP_HEIGHTS;
+  if (!all || !all[layer]) return null;
+  if (HEIGHT_CACHE[layer]) return HEIGHT_CACHE[layer];
+  const raw = atob(all[layer].data || '');
+  const data = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i);
+  HEIGHT_CACHE[layer] = { w: all[layer].w, h: all[layer].h, min: all[layer].min, max: all[layer].max, data };
+  return HEIGHT_CACHE[layer];
+}
+function heightAt(layer, x, z) {
+  const h = heightLayer(layer);
+  const m = cat().map;
+  if (!h || !m) return null;
+  const w = m.world;
+  const px = clamp(Math.floor((x - w.x_min) / (w.x_max - w.x_min) * h.w), 0, h.w - 1);
+  const py = clamp(Math.floor((z - w.z_min) / (w.z_max - w.z_min) * h.h), 0, h.h - 1);
+  const v = h.data[py * h.w + px];
+  return h.min + (v / 255) * (h.max - h.min);
 }
 function layerLabel(l) { return l === 'sky' ? 'Sky' : l === 'depths' ? 'Depths' : 'Surface'; }
 function bearing(a, b) {
@@ -311,6 +410,7 @@ function restoreUiState(raw) {
   if (MAP_FOUND.includes(map.found)) S.map.found = map.found;
   if (typeof map.reveal === 'boolean') S.map.reveal = map.reveal;
   if (typeof map.medals === 'boolean') S.map.medals = map.medals;
+  if (typeof map.path === 'boolean') S.map.path = map.path;
   if (typeof map.search === 'string') S.map.search = map.search;
   if (Array.isArray(map.cats)) {
     const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
@@ -333,6 +433,7 @@ function restoreUiState(raw) {
   if (typeof cook.filter === 'string') S.cook.filter = cook.filter;
   if (typeof cook.fx === 'string') S.cook.fx = cook.fx;
   if (typeof cook.sort === 'string' && SORT_FN[cook.sort]) S.cook.sort = cook.sort;
+  if (typeof cook.all === 'boolean') S.cook.all = cook.all;
 }
 
 function uiState() {
@@ -340,10 +441,11 @@ function uiState() {
     inv: { cat: S.inv.cat, filter: S.inv.filter },
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
-           reveal: S.map.reveal, medals: S.map.medals, search: S.map.search, cats: [...S.map.cats] },
+           reveal: S.map.reveal, medals: S.map.medals, path: S.map.path,
+           search: S.map.search, cats: [...S.map.cats] },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
-    cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort },
+    cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort, all: S.cook.all },
   };
 }
 
@@ -366,13 +468,14 @@ function resetFilters() {
   S.map.search = '';
   S.map.reveal = false;
   S.map.medals = true;
+  S.map.path = false;
   S.map.sel = null;
   S.map.sourceSel = null;
   S.map.sourceMat = null;
   S.map.sources = [];
   S.progress = { cat: 'overview', mode: 'found', filter: '' };
   S.comp = { group: '', state: 'TakePhoto', filter: '', sel: null };
-  S.cook = { filter: '', fx: '', sort: 'hearts', sel: null };
+  S.cook = { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1 };
   saveUiState();
   renderPage(S.page, true);
   if (S.page === 'map') {
@@ -396,6 +499,7 @@ async function start() {
   if (!savedCats) {
     for (const c of DEFAULT_MAP_CATS) S.map.cats.add(c);
   }
+  initStaticIcons();
   loadMapIcons();
   renderNav();
   renderSaves();
@@ -406,6 +510,7 @@ async function start() {
   window.addEventListener('beforeunload', saveUiState);
   await poll(true);
   showPage(S.page, true);
+  setTimeout(() => { if (cat().map && !S.map.fitted) loadMapImage(); }, 900);
 }
 
 async function poll(first) {
@@ -420,6 +525,10 @@ async function poll(first) {
       rebuildMaterialCounts();
       renderNav();
       if (changed) {
+        S.map.pathData = null;
+        S.map.pathFor = -1;
+        S.cook.allRows = null;
+        S.cook.allFor = -1;
         renderPage(S.page);
         renderStatusLine();
         document.documentElement.dataset.ready = '1';
@@ -582,17 +691,36 @@ function renderStatus() {
   const body = findEquip('armor', eq.armor_upper && eq.armor_upper.actor);
   const legs = findEquip('armor', eq.armor_lower && eq.armor_lower.actor);
   const wornArmor = [head, body, legs].filter(Boolean);
-  const activeEffects = [];
-  const seenEffects = new Set();
+  const effectMap = new Map();
+  const effectCap = { ResistCold: 2, ResistHot: 2, ResistBurn: 2, ResistElectric: 3, MiasmaGuard: 3 };
   for (const piece of wornArmor) {
     for (const fx of piece.effect_info || []) {
-      if (!seenEffects.has(fx.name)) { seenEffects.add(fx.name); activeEffects.push(fx); }
+      const cur = effectMap.get(fx.type);
+      const level = Math.max(1, fx.level || 1);
+      const cap = effectCap[fx.type] || 3;
+      if (cur) cur.level = Math.min(cap, (cur.level || 1) + level);
+      else effectMap.set(fx.type, { ...fx, level });
     }
   }
+  const activeEffects = [...effectMap.values()];
   const wornSetKey = wornArmor.length === 3 ? wornArmor[0].set_key : null;
   const setBonusFx = wornSetKey &&
     wornArmor.every((x) => x.set_key === wornSetKey && (x.rank || 1) >= SET_BONUS_LEVEL)
     ? (wornArmor[0].set_bonus || []) : [];
+  let attackLevel = (effectMap.get('AttackUp') || {}).level || 0;
+  for (const fx of setBonusFx) {
+    if (fx.type === 'AttackUp') attackLevel = Math.max(attackLevel, Math.max(1, fx.level || 1), Math.min(3, attackLevel + 1));
+  }
+  attackLevel = Math.min(3, attackLevel);
+  const attackMult = attackLevel === 1 ? 1.2 : attackLevel === 2 ? 1.3 : attackLevel === 3 ? 1.5 : 1;
+  const weaponAttack = weapon ? ((weapon.weapon && weapon.weapon.attack) || 0) : 0;
+  const fuseAttack = weapon && weapon.fused ? (ainfo(weapon.fused).fuse_attack || 0) : 0;
+  const attackMod = weapon && weapon.effect === 'AttackUp' ? (weapon.effect_value || 0) : 0;
+  const attack = weaponAttack + fuseAttack + attackMod;
+  const defense = wornArmor.reduce((n, p) => n + (p.defense || 0), 0);
+  const headDef = head ? head.defense || 0 : 0;
+  const bodyDef = body ? body.defense || 0 : 0;
+  const legDef = legs ? legs.defense || 0 : 0;
   const matCount = invCat('materials').items.length;
   const foodCount = invCat('food').items.length;
   const quick = (label, catKey) => {
@@ -614,7 +742,9 @@ function renderStatus() {
   const layer = st.layer || st.map_layer || 'Surface';
   const staminaMax = Number((st.stamina || {}).max) || 0;
   const energyMax = Number((st.energy || {}).max) || 0;
-  const playHours = st.playtime ? Math.floor(st.playtime / 3600) : null;
+  const playHours = st.playtime !== null && st.playtime !== undefined ? Math.floor(st.playtime / 3600) : null;
+  const playMinutes = st.playtime !== null && st.playtime !== undefined ? Math.floor((st.playtime % 3600) / 60) : null;
+  const pathKm = st.path_distance !== null && st.path_distance !== undefined ? st.path_distance / 1000 : null;
   const rupee = ainfo('PutRupee_Gold');
   const rupeeIcon = rupee.icon ? `<img class="rupee-icon" src="companion_data/icons/${encodeURIComponent(rupee.icon)}" alt="">` : '';
   el.innerHTML = `
@@ -647,7 +777,14 @@ function renderStatus() {
           <span class="vbig">${matCount}</span>
           <span class="vv">in pouch</span>
         </div>
-        ${playHours !== null ? `<div class="vital"><span class="vk">Playtime</span><span class="vbig">${playHours}<small>h</small></span><span class="vv">total</span></div>` : ''}
+      </div>
+
+      <div class="statrow combat">
+        <div class="stat"><span class="k">Attack</span><span class="v">${attack}</span>
+          <span class="vv">${weapon ? `Weapon ${weaponAttack}${fuseAttack ? ` + fuse ${fuseAttack}` : ''}${attackMod ? ` + mod ${attackMod}` : ''}` : 'No weapon equipped'}</span></div>
+        <div class="stat"><span class="k">Defense</span><span class="v">${defense}</span>
+          <span class="vv">${wornArmor.length ? `${headDef} + ${bodyDef} + ${legDef}` : 'No armor equipped'}</span></div>
+        ${attackLevel ? `<div class="stat"><span class="k">With Attack Up</span><span class="v">${Math.round(attack * attackMult)}</span><span class="vv">Lv. ${attackLevel}${setBonusFx.some((x) => x.type === 'AttackUp') ? ' · set bonus' : ''}</span></div>` : ''}
       </div>
 
       <div class="status-meta">
@@ -665,7 +802,8 @@ function renderStatus() {
         ${equipCard('Legs', legs, 'legs', legs ? `Defense ${legs.defense || 0}${legs.rank ? ` · Lv ${legs.rank}` : ''}` : '')}
       </div>
       ${(activeEffects.length || setBonusFx.length)
-        ? `<h3 class="fx-gap">Link effects</h3><div class="tagrow">${effectChips(activeEffects, 'eff')}${effectChips(setBonusFx, 'bonus')}</div>`
+        ? `<h3 class="fx-gap">Link effects</h3><div class="tagrow">${effectChips(activeEffects, 'eff')}${effectChips(setBonusFx, 'bonus')}</div>` +
+          effectNotes(activeEffects.concat(setBonusFx))
         : ''}
     </section>
 
@@ -674,6 +812,13 @@ function renderStatus() {
       <div class="sage-grid">${sages || '<span class="dimmed">No sage data in this save.</span>'}</div>
       <h3 class="side-gap">Abilities</h3>
       <div class="chiprow">${abilities}</div>
+      <h3 class="side-gap">Journey <span class="sub">from the save</span></h3>
+      <div class="statrow journey">
+        <div class="stat"><span class="k">Playtime</span><span class="v">${playHours !== null ? `${playHours}<small>h ${playMinutes}m</small>` : '--'}</span></div>
+        <div class="stat"><span class="k">Deaths</span><span class="v">${st.deaths !== null && st.deaths !== undefined ? fmtNum(st.deaths) : '--'}</span></div>
+        <div class="stat"><span class="k">Distance</span><span class="v">${pathKm !== null ? `${pathKm.toFixed(1)}<small>km</small>` : '--'}</span></div>
+        <div class="stat"><span class="k">Path points</span><span class="v">${st.path_points !== null && st.path_points !== undefined ? fmtNum(st.path_points) : '--'}</span></div>
+      </div>
     </section>
 
     <section class="card wide">
@@ -766,17 +911,17 @@ function renderInvDetail(it) {
         : '';
       body += `<div class="grid2"><dt>Fused with</dt><dd>${fuseIcon}${esc(it.fused_name || it.fused)}</dd></div>`;
     }
-    body += `<div class="grid2"><dt>Attack</dt><dd>${it.weapon && it.weapon.attack ? it.weapon.attack : '—'}</dd>`;
+    body += `<div class="grid2"><dt>Attack</dt><dd>${it.weapon && it.weapon.attack ? it.weapon.attack : '--'}</dd>`;
     if (it.effect) body += `<dt>Modifier</dt><dd>${esc(it.effect)}${it.effect_value ? ` +${it.effect_value}` : ''}</dd>`;
     body += `<dt>Sell</dt><dd>${fmtNum(it.sell)} rupees</dd></div>`;
   } else if (it.category === 'Armor') {
     body += `<div class="grid2"><dt>Defense</dt><dd>${it.defense || 0}</dd><dt>Level</dt><dd>${it.rank || 1} of 4</dd>` +
-      `<dt>Set</dt><dd>${esc(it.set_name || '—')}</dd>`;
+      `<dt>Set</dt><dd>${esc(it.set_name || '--')}</dd>`;
     if (it.defense_next) body += `<dt>Next defense</dt><dd>${it.defense_next}</dd>`;
     body += `</div>`;
     body += upgradeHTML(it);
   } else if (it.category === 'Food') {
-    body += `<div class="grid2"><dt>Hearts</dt><dd>${it.hearts ? fmtHearts(it.hearts) : '—'}</dd>` +
+    body += `<div class="grid2"><dt>Hearts</dt><dd>${it.hearts ? fmtHearts(it.hearts) : '--'}</dd>` +
       `<dt>Effect</dt><dd>${esc(it.effect_name || 'None')}${it.level ? ` (level ${it.level})` : ''}</dd>` +
       (it.seconds ? `<dt>Duration</dt><dd>${fmtTime(it.seconds)}</dd>` : '') +
       `<dt>Count</dt><dd>${it.count}</dd></div>`;
@@ -786,9 +931,9 @@ function renderInvDetail(it) {
     }
   } else if (it.category === 'Material') {
     body += `<div class="grid2"><dt>In pouch</dt><dd>${it.count}</dd>` +
-      `<dt>Hearts cooked</dt><dd>${it.hearts ? fmtHearts(it.hearts) : '—'}</dd>` +
+      `<dt>Hearts cooked</dt><dd>${it.hearts ? fmtHearts(it.hearts) : '--'}</dd>` +
       `<dt>Effect</dt><dd>${esc(it.effect_name || 'None')}</dd>` +
-      `<dt>Kind</dt><dd>${esc((it.kinds || []).join(', ') || '—')}</dd>` +
+      `<dt>Kind</dt><dd>${esc((it.kinds || []).join(', ') || '--')}</dd>` +
       `<dt>Sell</dt><dd>${fmtNum(it.sell)} rupees</dd></div>`;
     const src = (cat().material_sources || {})[it.actor];
     if (src) {
@@ -799,7 +944,7 @@ function renderInvDetail(it) {
     if (used.length) body += `<h3 class="label">Used in</h3><div class="used">` + used.map((d) => `<button data-cdish="${esc(d.id)}">${esc(d.name)}</button>`).join('') + `</div>`;
   } else {
     body += `<div class="grid2"><dt>Count</dt><dd>${it.count < 0 ? 'Owned' : it.count}</dd>` +
-      `<dt>Kind</dt><dd>${esc(it.kind || it.category || '—')}</dd>` +
+      `<dt>Kind</dt><dd>${esc(it.kind || it.category || '--')}</dd>` +
       (it.sell ? `<dt>Sell</dt><dd>${fmtNum(it.sell)} rupees</dd>` : '') + `</div>`;
   }
   el.innerHTML = `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2>` +
@@ -872,7 +1017,7 @@ function armorCell(p, selected) {
     upstat = '<span class="upstat max">MAX</span>';
   }
   return `<button class="cell${owned ? '' : ' dim'}" role="option" aria-selected="${selected}" data-armor="${esc(p.base)}">` +
-    `${badge}${upstat}${art({ icon: p.icon, name: p.name }, 'g')}<span class="nm">${esc(p.name)}</span></button>`;
+    `${badge}${upstat}${resistanceBadges(p.current && p.current.effect_info)}${art({ icon: p.icon, name: p.name }, 'g')}<span class="nm">${esc(p.name)}</span></button>`;
 }
 
 function renderArmor() {
@@ -915,9 +1060,38 @@ function renderArmor() {
 }
 
 function effectChips(list, cls) {
-  return (list || []).map((e) =>
-    `<span class="tag ${cls || ''}">${esc(e.name)}${e.level > 1 && !e.set ? ` Lv. ${e.level}` : ''}</span>`
-  ).join('');
+  return (list || []).map((e) => {
+    const desc = effectDesc(e);
+    return `<span class="tag ${cls || ''}"${desc ? ` title="${esc(desc)}"` : ''}>${esc(e.name)}${e.level > 1 && !e.set ? ` Lv. ${e.level}` : ''}</span>`;
+  }).join('');
+}
+function effectNotes(list) {
+  const seen = new Set();
+  const rows = [];
+  for (const e of (list || [])) {
+    const desc = effectDesc(e);
+    if (!desc || seen.has(e.type)) continue;
+    seen.add(e.type);
+    rows.push(`<div class="fxnote"><b>${esc(e.name)}</b><span>: ${esc(desc)}</span></div>`);
+  }
+  return rows.length ? `<div class="fxnotes">${rows.join('')}</div>` : '';
+}
+const RESIST_ICONS = {
+  ResistCold: 'ac-unit', ResistHot: 'sunny', ResistElectric: 'bolt', ResistBurn: 'local-fire-department',
+  ResistFreeze: 'ac-unit', NoBurning: 'local-fire-department', ResitLightning: 'bolt',
+  MiasmaGuard: 'shield', MiasmaDefenseUp: 'shield', NotSlippy: 'hiking', SwimSpeedUp: 'pool',
+  ClimbSpeedUp: 'hiking', LightEmission: 'lightbulb', QuietnessUp: 'visibility-off',
+};
+function resistanceBadges(list, cls) {
+  const seen = new Set();
+  const out = [];
+  for (const e of (list || [])) {
+    const name = RESIST_ICONS[e.type];
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(micon(name, e.name, cls));
+  }
+  return out.length ? `<span class="resists">${out.join('')}</span>` : '';
 }
 
 function slotLabel(slot) {
@@ -960,7 +1134,7 @@ function renderArmorDetail(p) {
 
   const effects = current.effect_info || [];
   const effectBlock = `<h3 class="label">Effects</h3>` +
-    (effects.length ? `<div class="tagrow">${effectChips(effects, 'eff')}</div>`
+    (effects.length ? `<div class="tagrow">${effectChips(effects, 'eff')}</div>` + effectNotes(effects)
                     : `<p class="note">No special effect on this piece.</p>`);
 
   const slotOrder = { Head: 0, Upper: 1, Lower: 2 };
@@ -984,7 +1158,7 @@ function renderArmorDetail(p) {
   const bonusBlock = bonus.length
     ? `<div class="setbonus"><div class="sb-head"><span class="tag gold">Set bonus</span>` +
       `<span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Unlocked' : requirement}</span></div>` +
-      `<div class="tagrow">${effectChips(bonus, 'bonus')}</div>` +
+      `<div class="tagrow">${effectChips(bonus, 'bonus')}</div>` + effectNotes(bonus) +
       `<div class="dim">${bonusReady
         ? 'All pieces meet the requirement. Applies when the full set is equipped.'
         : `${ownedPieces.length} of ${setPieces.length} pieces owned${allOwned && multiPiece ? ` · lowest Lv ${minRank}` : ''}.`}</div></div>`
@@ -995,7 +1169,7 @@ function renderArmorDetail(p) {
     : `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
       `<div class="dim">This piece is worn on its own. No set bonus.</div></div>`;
 
-  el.innerHTML = `<div class="in"><div class="d-head">${art({ icon: p.icon }, 'hero')}<div><h2 class="d-name">${esc(p.name)}</h2>` +
+  el.innerHTML = `<div class="in"><div class="d-head">${art({ icon: p.icon }, 'hero')}<div><h2 class="d-name">${esc(p.name)}${resistanceBadges(effects)}</h2>` +
     `<div class="d-sub">${esc(p.set_name || 'Armor')} · ${owned ? `owned, level ${p.owned.rank || 1}` : 'not owned'}</div></div></div>` +
     `<div class="tagrow"><span class="tag">${slotLabel(p.slot)}</span>` +
     `<span class="tag">Defense ${current.defense || 0}</span>${owned ? '<span class="tag gold">Owned</span>' : ''}</div>` +
@@ -1343,6 +1517,8 @@ function loadMapImage() {
   const layer = m.layers[S.map.layer];
   if (!layer) return;
   const img = $('#map-img');
+  img.style.width = m.width + 'px';
+  img.style.height = m.height + 'px';
   const src = 'companion_data/' + layer.image;
   if (img.dataset.layer === S.map.layer && img.src) { drawMap(); return; }
   img.dataset.layer = S.map.layer;
@@ -1355,7 +1531,7 @@ function loadMapImage() {
   img.onload = () => {
     $('#map-loading').hidden = true;
     if (S.map.pending) { const p = S.map.pending; S.map.pending = null; centerOnItem(p); }
-    else if (!S.map.fitted) { fitMap(); S.map.fitted = true; }
+    else if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; }
     drawMap();
   };
   img.onerror = () => {
@@ -1377,19 +1553,69 @@ function renderMap() {
   renderMapDetail();
   renderNearby();
   loadMapImage();
-  requestAnimationFrame(() => { if (!S.map.fitted) { fitMap(); S.map.fitted = true; } else drawMap(); });
+  if (S.map.path && !S.map.pathData) {
+    ensureHeroPath().then(() => drawMap());
+  }
+  requestAnimationFrame(() => { if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; } else drawMap(); });
 }
 function renderMapToolbar() {
-  const layers = [['surface', 'Surface'], ['sky', 'Sky'], ['depths', 'Depths']];
-  $('#map-layers').innerHTML = layers.map(([k, l]) =>
-    `<button data-layer="${k}" aria-pressed="${S.map.layer === k}">${l}</button>`).join('');
-  const found = [['all', 'All'], ['missing', 'Missing'], ['found', 'Found']];
-  $('#map-found').innerHTML = found.map(([k, l]) =>
-    `<button data-found="${k}" aria-pressed="${S.map.found === k}">${l}</button>`).join('');
+  const layers = [['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud'], ['depths', 'Depths', 'dark-mode']];
+  $('#map-layers').innerHTML = layers.map(([k, l, ic]) =>
+    `<button data-layer="${k}" aria-pressed="${S.map.layer === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
+  const found = [['all', 'All', 'select-all'], ['missing', 'Missing', 'radio-button-unchecked'], ['found', 'Found', 'check-circle']];
+  $('#map-found').innerHTML = found.map(([k, l, ic]) =>
+    `<button data-found="${k}" aria-pressed="${S.map.found === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
+  const actions = $('.map-cat-actions');
+  if (actions) {
+    actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')}</button>` +
+      `<button data-mcats="none" title="Hide all marker types" aria-label="Hide all marker types">${micon('visibility-off')}</button>`;
+  }
+  const zoomIn = $('#map-zoomin');
+  if (zoomIn) zoomIn.innerHTML = micon('add');
+  const zoomOut = $('#map-zoomout');
+  if (zoomOut) zoomOut.innerHTML = micon('remove');
+  const fit = $('#map-fit');
+  if (fit) fit.innerHTML = micon('fit-screen');
+  const me = $('#map-me');
+  if (me) me.innerHTML = micon('my-location');
   $('#map-search').value = S.map.search;
   const reveal = $('#map-reveal');
   if (reveal) reveal.checked = !!S.map.reveal;
+  const path = $('#map-path');
+  if (path) path.checked = !!S.map.path;
+  renderMapPathNote();
   updateSearchClear();
+}
+
+function renderMapPathNote() {
+  const el = $('#map-path-note');
+  if (!el) return;
+  const data = S.map.pathData;
+  if (!S.map.path) { el.hidden = true; el.textContent = ''; return; }
+  if (!data) {
+    el.hidden = false;
+    el.textContent = S.map.pathLoading ? 'Reading footprint.sav...' : "No Hero's Path data in this save yet.";
+    return;
+  }
+  const km = (data.distance || 0) / 1000;
+  el.hidden = false;
+  el.textContent = `${fmtNum(data.points)} points · ${km.toFixed(1)} km · ${fmtNum(data.deaths_count)} deaths`;
+}
+
+async function ensureHeroPath() {
+  if (S.map.pathData && S.map.pathFor === S.dataVersion) return S.map.pathData;
+  if (S.map.pathLoading) return null;
+  S.map.pathLoading = true;
+  renderMapPathNote();
+  try {
+    const data = await call('hero_path');
+    S.map.pathData = data || null;
+    S.map.pathFor = S.dataVersion;
+  } finally {
+    S.map.pathLoading = false;
+    renderMapPathNote();
+  }
+  return S.map.pathData;
 }
 function updateSearchClear() {
   const btn = $('#map-search-clear');
@@ -1435,8 +1661,8 @@ function renderMapDetail() {
       `<div class="k">Status</div><div class="v">${state}</div>` +
       `<div class="k">Position</div><div class="v">${fmtXYZ(item.x, item.y, item.z)}</div>` +
       (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
-      `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">Center</button>` +
-      `<button class="btn" data-mprogress="${esc(item.cat)}">All ${esc(meta.label.toLowerCase())}</button></div>`;
+      `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">${micon('my-location', '', 'sm')} Center</button>` +
+      `<button class="btn" data-mprogress="${esc(item.cat)}">${micon('format-list-bulleted', '', 'sm')} All ${esc(meta.label.toLowerCase())}</button></div>`;
     return;
   }
   if (S.map.sourceSel !== null && S.map.sources[S.map.sourceSel]) {
@@ -1544,14 +1770,15 @@ function renderNearby() {
 }
 function fitMap() {
   const m = cat().map;
-  if (!m) return;
+  if (!m) return false;
   const vp = $('#map-viewport');
   const w = vp.clientWidth, h = vp.clientHeight;
-  if (!w || !h) return;
+  if (!w || !h) return false;
   S.map.zoom = Math.min(w / m.width, h / m.height) * 0.98;
   S.map.tx = (w - m.width * S.map.zoom) / 2;
   S.map.ty = (h - m.height * S.map.zoom) / 2;
   applyMap();
+  return true;
 }
 function fitSources(points) {
   const m = cat().map;
@@ -1666,6 +1893,38 @@ function drawFog(ctx, w, h) {
   ctx.restore();
 }
 
+function drawHeroPath(ctx, w, h, pr) {
+  const data = S.map.pathData;
+  if (!S.map.path || !data) return;
+  const layer = S.map.layer === 'depths' ? 2 : S.map.layer === 'sky' ? 0 : 1;
+  const color = S.map.layer === 'depths' ? 'rgba(255, 143, 188, .62)'
+    : S.map.layer === 'sky' ? 'rgba(255, 212, 121, .62)' : 'rgba(143, 231, 255, .62)';
+  ctx.save();
+  ctx.translate(S.map.tx, S.map.ty);
+  ctx.scale(S.map.zoom, S.map.zoom);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, 2.2 / S.map.zoom);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const seg of data.segments || []) {
+    if (seg.layer !== layer || !seg.points || seg.points.length < 4) continue;
+    ctx.beginPath();
+    ctx.moveTo(pr.x(seg.points[0]), pr.y(seg.points[1]));
+    for (let i = 2; i < seg.points.length; i += 2) {
+      ctx.lineTo(pr.x(seg.points[i]), pr.y(seg.points[i + 1]));
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(233, 122, 106, .9)';
+  for (const d of data.deaths || []) {
+    if (d.layer !== layer) continue;
+    ctx.beginPath();
+    ctx.arc(pr.x(d.x), pr.y(d.z), Math.max(2, 4 / S.map.zoom), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawMap() {
   const m = cat().map;
   if (!m) return;
@@ -1682,6 +1941,7 @@ function drawMap() {
   ctx.clearRect(0, 0, w, h);
   const pr = projection();
   if (!S.map.reveal) drawFog(ctx, w, h);
+  drawHeroPath(ctx, w, h, pr);
   const items = mapVisible();
   const pts = [];
   for (const x of items) {
@@ -2011,8 +2271,9 @@ function updateMapCoords(clientX, clientY) {
   const py = (clientY - rect.top - S.map.ty) / S.map.zoom;
   const x = m.world.x_min + (px / m.width) * (m.world.x_max - m.world.x_min);
   const z = m.world.z_min + (py / m.height) * (m.world.z_max - m.world.z_min);
+  const y = heightAt(S.map.layer, x, z);
   el.hidden = false;
-  el.textContent = `${layerLabel(S.map.layer)} · ${fmtXZ(x, z)}`;
+  el.textContent = `${layerLabel(S.map.layer)} · ${fmtXYZ(x, y === null ? 0 : y, z)}`;
 }
 
 /* ------------------------------------------------------------------ progress */
@@ -2028,8 +2289,12 @@ function renderProgress() {
     const overall = pct(totals.complete, totals.total);
     el.innerHTML = `<div><h2>Completion</h2><div class="sub">${totals.complete} complete · ${totals.started} started · ${totals.total - totals.complete - totals.started} missing</div></div>` +
       `<div class="big ring" style="--p:${overall}"><span>${overall}<small>%</small></span></div>`;
-    $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="true"><span>Overview</span><span class="c">${totals.total}</span></button>` +
-      cats.map((c) => `<button class="fxchip" data-pcat="${c.key}" aria-pressed="false"><span>${esc(c.label)}</span><span class="c">${c.complete}/${c.total}</span></button>`).join('');
+    $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="true">${micon('check-circle', '', 'sm')}<span>Overview</span><span class="c">${totals.total}</span></button>` +
+      cats.map((c) => {
+        const iconFile = (cat().map_icons || {})[c.key];
+        const ico = iconFile ? `<img class="chipico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '';
+        return `<button class="fxchip" data-pcat="${c.key}" aria-pressed="false">${ico}<span>${esc(c.label)}</span><span class="c">${c.complete}/${c.total}</span></button>`;
+      }).join('');
     $('#progress-mode').hidden = true;
     $('#progress-filter').hidden = true;
     $('#progress-list').innerHTML = `<div class="progress-grid">` + cats.map((c) => {
@@ -2050,8 +2315,12 @@ function renderProgress() {
   el.innerHTML = `<div><button class="crumb" data-pcat="overview">← Overview</button><h2 style="margin-top:8px">${catIconHtml}${esc(c.label)}</h2>` +
     `<div class="sub">${c.complete} complete · ${c.started} started · ${c.missing} missing</div></div>` +
     `<div class="big ring" style="--p:${catPct}"><span>${catPct}<small>%</small></span></div>`;
-  $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="false"><span>Overview</span><span class="c">${totals.total}</span></button>` +
-    cats.map((x) => `<button class="fxchip" data-pcat="${x.key}" aria-pressed="${x.key === current}"><span>${esc(x.label)}</span><span class="c">${x.complete}/${x.total}</span></button>`).join('');
+  $('#progress-cats').innerHTML = `<button class="fxchip" data-pcat="overview" aria-pressed="false">${micon('check-circle', '', 'sm')}<span>Overview</span><span class="c">${totals.total}</span></button>` +
+    cats.map((x) => {
+      const iconFile = (cat().map_icons || {})[x.key];
+      const ico = iconFile ? `<img class="chipico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '';
+      return `<button class="fxchip" data-pcat="${x.key}" aria-pressed="${x.key === current}">${ico}<span>${esc(x.label)}</span><span class="c">${x.complete}/${x.total}</span></button>`;
+    }).join('');
   $('#progress-mode').hidden = false;
   $('#progress-mode').innerHTML = [['all', 'All'], ['missing', 'Missing'], ['found', 'Found']].map(([k, l]) =>
     `<button data-pmode="${k}" aria-pressed="${S.progress.mode === k}">${l}</button>`).join('');
@@ -2111,10 +2380,8 @@ function renderCompendium() {
   if (!list.some((x) => x.c.actor === S.comp.sel)) S.comp.sel = list[0].c.actor;
   grid.innerHTML = list.map((x) => {
     const cls = x.st.state === 'Unopened' ? ' comp-cell unopened' : ' comp-cell';
-    const state = x.st.state === 'TakePhoto' ? 'photographed' : x.st.state === 'Buy' ? 'purchased' : 'unopened';
-    const label = x.st.state === 'TakePhoto' ? 'photo' : x.st.state === 'Buy' ? 'bought' : '';
     return `<button class="cell${cls}" role="option" aria-selected="${x.c.actor === S.comp.sel}" data-cactor="${esc(x.c.actor)}">` +
-      `${label ? `<span class="comp-state ${state}">${label}</span>` : ''}${x.st.new ? '<span class="eq"></span>' : ''}` +
+      `${x.st.new ? '<span class="eq"></span>' : ''}` +
       `${art({ icon: x.c.icon, name: x.c.name }, 'g')}<span class="nm">${esc(x.c.name)}</span></button>`;
   }).join('');
   const chosen = list.find((x) => x.c.actor === S.comp.sel) || list[0];
@@ -2142,9 +2409,14 @@ const SORT_FN = {
   effect: (a, b) => (!a.effect_name - !b.effect_name) || (a.effect_name || '').localeCompare(b.effect_name || '') || heartScore(b) - heartScore(a) || byName(a, b),
 };
 const fxKey = (d) => d.effect || 'none';
+function cookBaseRows() {
+  const dishes = (dyn().cooking && dyn().cooking.dishes) || [];
+  if (S.cook.all && S.cook.allRows) return S.cook.allRows;
+  return dishes;
+}
 function cookEffects() {
   const m = new Map();
-  for (const d of ((dyn().cooking && dyn().cooking.dishes) || [])) {
+  for (const d of cookBaseRows()) {
     const k = fxKey(d);
     if (!m.has(k)) m.set(k, { key: k, name: k === 'none' ? 'No effect' : d.effect_name, effect: d.effect, count: 0 });
     m.get(k).count++;
@@ -2152,34 +2424,56 @@ function cookEffects() {
   return [...m.values()].sort((a, b) => (a.key === 'none') - (b.key === 'none') || a.name.localeCompare(b.name));
 }
 function cookItems() {
-  const dishes = (dyn().cooking && dyn().cooking.dishes) || [];
   const f = S.cook.filter.trim().toLowerCase();
-  let list = dishes;
+  let list = cookBaseRows();
   if (S.cook.fx) list = list.filter((d) => fxKey(d) === S.cook.fx);
   list = [...list].sort(SORT_FN[S.cook.sort] || SORT_FN.hearts);
-  if (f) list = list.filter((d) => [d.name, d.effect_name].concat((d.pot || []).map((p) => p.name)).some((v) => v && v.toLowerCase().includes(f)));
+  if (f) list = list.filter((d) => [d.name, d.effect_name].concat((d.pot || []).map((p) => p.name), d.req || []).some((v) => v && v.toLowerCase().includes(f)));
   return list;
 }
+async function ensureAllRecipes() {
+  if (S.cook.allRows && S.cook.allFor === S.dataVersion) return S.cook.allRows;
+  const rows = await call('all_recipes');
+  S.cook.allRows = Array.isArray(rows) ? rows : [];
+  S.cook.allFor = S.dataVersion;
+  return S.cook.allRows;
+}
+function staminaRecoveryHTML(it) {
+  if (it.effect !== 'StaminaRecover') return '';
+  const level = Math.min(15, Number(it.level) || 0);
+  return `<div class="gauge">${staminaWheel(clamp(level / 15, 0, 1))}</div>` +
+    `<div class="h-text">${level} of 15 stamina segments, ${Math.round(clamp(level / 15, 0, 1) * 100)}% of a wheel</div>`;
+}
+function extraStaminaHTML(it) {
+  if (it.effect !== 'ExStaminaMaxUp') return '';
+  const wheels = Math.min(2, (Number(it.level) || 0) / 10);
+  return `<div class="gauge">${staminaGauge(wheels)}</div>` +
+    `<div class="h-text">Adds ${wheels.toFixed(1)} extra stamina wheels</div>`;
+}
 function renderCooking() {
-  const dishes = (dyn().cooking && dyn().cooking.dishes) || [];
+  if (S.cook.all && !S.cook.allRows) ensureAllRecipes().then(() => renderCooking());
+  const rows = cookBaseRows();
   const effects = cookEffects();
   if (S.cook.fx && !effects.some((e) => e.key === S.cook.fx)) S.cook.fx = '';
   if (!SORT_FN[S.cook.sort]) S.cook.sort = 'hearts';
-  $('#cook-fx').innerHTML = `<button class="fxchip" data-cfx="" aria-pressed="${S.cook.fx === ''}"><span>All</span><span class="c">${dishes.length}</span></button>` +
+  $('#cook-fx').innerHTML = `<button class="fxchip" data-cfx="" aria-pressed="${S.cook.fx === ''}"><span>All</span><span class="c">${rows.length}</span></button>` +
     effects.map((e) => `<button class="fxchip" data-cfx="${esc(e.key)}" aria-pressed="${S.cook.fx === e.key}">${e.effect ? sigil(e.effect) : ''}<span>${esc(e.name)}</span><span class="c">${e.count}</span></button>`).join('');
+  const allSwitch = $('#cook-all');
+  if (allSwitch) allSwitch.setAttribute('aria-checked', String(S.cook.all));
   $('#cook-sort').innerHTML = COOK_SORTS.map(([k, l]) => `<button data-csort="${k}" aria-pressed="${S.cook.sort === k}">${l}</button>`).join('');
   $('#cook-filter').value = S.cook.filter;
   const list = cookItems();
   const grid = $('#cook-grid');
   if (!list.length) {
-    grid.innerHTML = `<div class="empty"><b>Nothing to cook yet</b>${dishes.length ? 'No dish matches this filter.' : 'The pouch holds no combination that makes a dish.'}</div>`;
+    grid.innerHTML = `<div class="empty"><b>${S.cook.all ? 'No recipes match' : 'Nothing to cook yet'}</b>${rows.length ? 'No dish matches this filter.' : (S.cook.all ? 'The recipe table is empty.' : 'The pouch holds no combination that makes a dish.')}</div>`;
     $('#cook-detail').innerHTML = '';
     return;
   }
   if (!list.some((d) => d.id === S.cook.sel)) S.cook.sel = list[0].id;
   grid.innerHTML = list.map((d) => {
     const badge = d.extra ? `<span class="badge">${heart(4, true)}+${fmtHearts(d.extra)}</span>` : d.hearts > 0 ? `<span class="badge">${heart(4)}${fmtHearts(d.hearts)}</span>` : '';
-    return `<button class="cell" role="option" aria-selected="${d.id === S.cook.sel}" data-cdish="${esc(d.id)}">${sigil(d.effect)}${badge}${art(d)}<span class="nm">${esc(d.name)}</span></button>`;
+    const stamina = d.effect === 'StaminaRecover' ? `<span class="stamcard">${staminaWheel(clamp((d.level || 0) / 15, 0, 1))}</span>` : '';
+    return `<button class="cell${d.all && !d.cookable ? ' dim' : ''}" role="option" aria-selected="${d.id === S.cook.sel}" data-cdish="${esc(d.id)}">${sigil(d.effect)}${badge}${stamina}${art(d)}<span class="nm">${esc(d.name)}</span></button>`;
   }).join('');
   renderCookDetail(list.find((d) => d.id === S.cook.sel) || list[0]);
 }
@@ -2191,13 +2485,23 @@ function renderCookDetail(it) {
   else if (it.hearts > 0) h = `<div class="hearts">${hearts(it.hearts)}</div><div class="h-text">Restores ${fmtHearts(it.hearts)} ${it.hearts === 1 ? 'heart' : 'hearts'}</div>`;
   else h = `<div class="h-text dimmed">No hearts restored</div>`;
   let fx;
-  if (it.effect && it.effect !== 'LifeMaxUp') fx = `<div class="effect">${sigil(it.effect)}<span>${esc(it.effect_name)}</span>${it.seconds ? `<span class="time">${fmtTime(it.seconds)}</span>` : ''}</div>`;
+  if (it.effect && it.effect !== 'LifeMaxUp') fx = `<div class="effect">${sigil(it.effect)}<span>${esc(it.effect_name)}</span>${it.seconds ? `<span class="time">${fmtTime(it.seconds)}</span>` : ''}</div>` +
+    staminaRecoveryHTML(it) + extraStaminaHTML(it);
   else if (it.mixed) fx = `<div class="effect none">Mixed effects cancel out, so this cooks with none.</div>`;
   else fx = it.effect === 'LifeMaxUp' ? '' : `<div class="effect none">No effect</div>`;
   const pot = (it.pot || []).map((p) => `<li><button data-invactor="${esc(p.actor)}"><span class="mini">${art(p, 'i')}</span><span class="pn">${esc(p.name)}</span><span class="pc">×${p.n}</span></button></li>`).join('');
-  el.innerHTML = `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">${plural(it.size, 'ingredient', 'ingredients')}</div></div></div>` +
-    h + fx + `<div class="ornament"></div><h3 class="label">In the pot</h3><ul class="pot">${pot}</ul>` +
-    `<p class="note">An estimate. A critical cook can add hearts or time.</p></div>`;
+  const req = (it.req || []).map((r, i) => {
+    const rep = (it.pot || [])[i];
+    return `<li><span class="mini">${rep ? art(rep, 'i') : ''}</span><span class="pn">${esc(r)}</span></li>`;
+  }).join('');
+  const reqBlock = it.all
+    ? `<h3 class="label">Recipe</h3><ul class="pot">${req}</ul>` +
+      `<div class="tagrow"><span class="tag ${it.cookable ? 'gold' : ''}">${it.cookable ? 'Can cook now' : 'Missing ingredients'}</span>` +
+      (it.missing && it.missing.length ? `<span class="tag">Missing: ${esc(it.missing.join(', '))}</span>` : '') + `</div>`
+    : `<h3 class="label">In the pot</h3><ul class="pot">${pot}</ul>`;
+  el.innerHTML = `<div class="in"><div class="d-head">${art(it, 'hero')}<div><h2 class="d-name">${esc(it.name)}</h2><div class="d-sub">${it.all ? 'Recipe' : plural(it.size, 'ingredient', 'ingredients')}</div></div></div>` +
+    h + fx + `<div class="ornament"></div>` + reqBlock +
+    `<p class="note">${it.all ? 'Cook this recipe with any ingredient that matches each slot.' : 'An estimate. A critical cook can add hearts or time.'}</p></div>`;
 }
 
 /* ------------------------------------------------------------------ settings */
@@ -2252,6 +2556,13 @@ function attachStatic() {
   $('#armor-filter').addEventListener('input', (e) => { S.armor.filter = e.target.value; renderArmor(); });
   $('#armor-set').addEventListener('change', (e) => { S.armor.set = e.target.value; renderArmor(); });
   $('#armor-owned').addEventListener('click', () => { S.armor.owned = !S.armor.owned; renderArmor(); });
+  const cookAll = $('#cook-all');
+  if (cookAll) cookAll.addEventListener('click', async () => {
+    S.cook.all = !S.cook.all;
+    saveUiStateSoon();
+    if (S.cook.all && !S.cook.allRows) await ensureAllRecipes();
+    renderCooking();
+  });
   $('#map-search').addEventListener('input', (e) => {
     S.map.search = e.target.value;
     updateSearchClear();
@@ -2274,6 +2585,14 @@ function attachStatic() {
     renderNearby();
     drawMap();
     requestMinimapDraw();
+  });
+  const pathMap = $('#map-path');
+  if (pathMap) pathMap.addEventListener('change', async (e) => {
+    S.map.path = !!e.target.checked;
+    saveUiStateSoon();
+    if (S.map.path) await ensureHeroPath();
+    renderMapPathNote();
+    drawMap();
   });
   $('#progress-filter').addEventListener('input', (e) => { S.progress.filter = e.target.value; renderProgress(); });
   $('#comp-filter').addEventListener('input', (e) => { S.comp.filter = e.target.value; renderCompendium(); });
@@ -2346,7 +2665,7 @@ function attachStatic() {
   vp.addEventListener('dblclick', (e) => { e.preventDefault(); zoomAt(1.6, e.clientX, e.clientY); });
   $('#map-zoomin').addEventListener('click', () => zoomAt(1.45));
   $('#map-zoomout').addEventListener('click', () => zoomAt(1 / 1.45));
-  $('#map-fit').addEventListener('click', fitMap);
+  $('#map-fit').addEventListener('click', () => { if (fitMap()) S.map.fitted = true; });
   $('#map-me').addEventListener('click', centerOnPlayer);
 
   const mini = $('#minimap');
@@ -2383,7 +2702,7 @@ function attachStatic() {
   }
   window.addEventListener('resize', () => {
     S.map.fitted = false;
-    if (S.page === 'map') { fitMap(); S.map.fitted = true; }
+    if (S.page === 'map' && fitMap()) S.map.fitted = true;
   });
 }
 

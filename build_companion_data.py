@@ -12,6 +12,7 @@ Run:
 The output goes to ui/companion_data/ and is gitignored.
 """
 import argparse
+import base64
 import collections
 import json
 import os
@@ -493,6 +494,14 @@ class Builder:
                            if row.get('ActorName')}
         self.enhancement = {basename(row['__RowId']): row for row in
                             byml.Byml(self.rf.read(self.rf.find('RSDB/EnhancementMaterialInfo.', '.byml.zs'))).root}
+        self.attachment_info = {}
+        try:
+            for row in byml.Byml(self.rf.read(self.rf.find('RSDB/AttachmentActorInfo.', '.byml.zs'))).root:
+                actor = row.get('__RowId')
+                if actor:
+                    self.attachment_info[actor] = int(row.get('AttachmentAdditionalDamage', 0) or 0)
+        except Exception:
+            self.attachment_info = {}
         self.series_effects = {}
         series_path = ('GameParameter/SeriesArmorEffectParamList/'
                        'Default.game__equipment__SeriesArmorEffectParamList.bgyml')
@@ -706,6 +715,7 @@ class Builder:
                 'hearts': float(row.get('HitPointRecover', 0) or 0),
                 'use': row.get('PouchUseType') or '',
                 'stockable': bool(row.get('PouchStockable')),
+                'fuse_attack': self.attachment_info.get(actor, 0),
             }
             if actor in self.weapon_stats:
                 entry['weapon'] = self.weapon_stats[actor]
@@ -1224,21 +1234,66 @@ class Builder:
         surface = images['G']
         sky = images['S']
         depth = images['U'] if cells['U'] else ImageOps.colorize(ImageOps.grayscale(surface), black=(3, 6, 12), white=(32, 58, 68))
-        surface.save(os.path.join(MAP, 'surface.webp'), 'WEBP', quality=88, method=6)
-        sky.save(os.path.join(MAP, 'sky.webp'), 'WEBP', quality=88, method=6)
-        depth.save(os.path.join(MAP, 'depths.webp'), 'WEBP', quality=86, method=6)
+        layers = {}
+        for key, canvas, quality in (('surface', surface, 88), ('sky', sky, 88), ('depths', depth, 86)):
+            canvas.save(os.path.join(MAP, key + '.webp'), 'WEBP', quality=quality, method=6)
+            # The UI never needs the full LOD1 image at once. A 3600px display
+            # copy decodes several times faster while keeping the same logical
+            # world size in the catalog.
+            display = canvas.copy()
+            display.thumbnail((3600, 3000), Image.LANCZOS)
+            display.save(os.path.join(MAP, key + '-display.webp'), 'WEBP', quality=86, method=6)
+            layers[key] = {'label': key.title(), 'image': 'map/%s-display.webp' % key}
         meta = {
             'width': surface.width, 'height': surface.height,
             'cols': cols, 'rows': rows, 'cell': cell_px,
             'world': WORLD, 'lod': self.lod,
-            'layers': {
-                'surface': {'label': 'Surface', 'image': 'map/surface.webp'},
-                'sky': {'label': 'Sky', 'image': 'map/sky.webp'},
-                'depths': {'label': 'Depths', 'image': 'map/depths.webp'},
-            },
+            'layers': layers,
         }
         self.catalog['map'] = meta
         json.dump(meta, open(os.path.join(MAP, 'map.json'), 'w', encoding='utf-8'), indent=1)
+
+    def build_height_map(self):
+        """Pack the game's terrain height grids for the map cursor readout.
+
+        Each HeightMap cell is a 100x100 grid of (height, weight) float pairs.
+        The UI only needs a small grayscale sample, so this downsamples each
+        layer to 600x500 and writes a base64 script next to the map images.
+        """
+        cell_re = re.compile(r'UI/Map/HeightMap/([GSU])_(\d+)-(\d+)\.bhtmp\.zs$')
+        layer_key = {'G': 'surface', 'S': 'sky', 'U': 'depths'}
+        out = {}
+        for layer, key in layer_key.items():
+            cells = {}
+            for path in self.rf.files:
+                m = cell_re.match(path)
+                if m and m.group(1) == layer:
+                    cells[(int(m.group(2)), int(m.group(3)))] = path
+            if not cells:
+                continue
+            grid = Image.new('F', (1200, 1000))
+            for (cx, cz), path in cells.items():
+                raw = self.rf.read(path)
+                if len(raw) < 16 + 20000 * 4:
+                    continue
+                floats = struct.unpack_from('<20000f', raw, 16)
+                cell = Image.frombytes('F', (100, 100),
+                                       struct.pack('<10000f', *floats[0::2]))
+                grid.paste(cell, (cx * 100, cz * 100))
+            small = grid.resize((600, 500), Image.BILINEAR)
+            values = list(small.getdata())
+            lo = min(values)
+            hi = max(values)
+            scale = 255.0 / (hi - lo) if hi > lo else 0.0
+            packed = bytes(int((v - lo) * scale + 0.5) for v in values)
+            out[key] = {
+                'w': 600, 'h': 500, 'min': round(lo, 2), 'max': round(hi, 2),
+                'data': base64.b64encode(packed).decode('ascii'),
+            }
+        if out:
+            with open(os.path.join(MAP, 'height.js'), 'w', encoding='ascii') as f:
+                f.write('window.MAP_HEIGHTS=' + json.dumps(out, separators=(',', ':')) + ';\n')
+            log('height maps: %s' % ', '.join(sorted(out)))
 
     # --- map markers ----------------------------------------------------------
 
@@ -1370,6 +1425,7 @@ class Builder:
         self.build_material_sources()
         if not self.skip_map:
             self.build_map()
+            self.build_height_map()
             self.build_reveal_regions()
         self.extract_map_icons()
         # Copy the cooking data so the UI has a single self-contained folder.

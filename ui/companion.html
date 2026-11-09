@@ -85,7 +85,7 @@
           <div class="seg map-layers" id="map-layers"></div>
           <div class="seg map-found" id="map-found"></div>
           <label class="filter map-search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+            <span class="msi sm" data-micon="search" aria-hidden="true"></span>
             <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place">
             <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
           </label>
@@ -93,7 +93,9 @@
             <button data-mcats="all">Show all</button>
             <button data-mcats="none">Hide all</button>
           </div>
-          <label class="map-reveal"><input type="checkbox" id="map-reveal"> <span>Reveal full map</span></label>
+          <label class="map-reveal"><input type="checkbox" id="map-reveal"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Reveal full map</span></label>
+          <label class="map-reveal"><input type="checkbox" id="map-path"> <span class="msi sm" data-micon="route" aria-hidden="true"></span> <span>Hero's Path</span></label>
+          <div class="map-path-note" id="map-path-note" hidden></div>
           <div class="map-cats" id="map-cats"></div>
         </aside>
         <div class="map-main">
@@ -164,6 +166,7 @@
           <div class="toolbar">
             <div class="chips" id="cook-fx"></div>
             <div class="toolright">
+              <label class="switchrow"><button class="switch" id="cook-all" role="switch" aria-checked="false"></button><span>All recipes</span></label>
               <div class="seg" id="cook-sort"></div>
               <label class="filter">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
@@ -187,6 +190,8 @@
 <div class="modal" id="settings" hidden></div>
 <div class="modal" id="sources" hidden></div>
 <div class="toast" id="toast" hidden></div>
+<script src="material/icons.js"></script>
+<script src="companion_data/map/height.js"></script>
 <script src="companion.js"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ offset to an array/string/vector. Everything here is read-only. The only writes
 the companion may make are to its own settings file.
 """
 import json
+import math
 import os
 import struct
 
@@ -95,6 +96,8 @@ class Save:
         self.actors = self.catalog.get('actors', {})
         self.cookdata_path = cookdata_path or os.path.join(DATA, 'cookdata.json')
         self.cook = cook_core.Cook(self.cookdata_path)
+        self._footprint = None
+        self._footprint_mtime = None
 
     # --- raw access -----------------------------------------------------------
 
@@ -104,6 +107,9 @@ class Save:
     def u32(self, name):
         v = self.raw(name)
         return None if v is None else v
+
+    def u32_hash(self, key_hash):
+        return self.table.get(key_hash)
 
     def i32(self, name):
         v = self.raw(name)
@@ -218,6 +224,11 @@ class Save:
             else:
                 layer = 'Ground'
         playtime = self.u32('Playtime')
+        if playtime is None:
+            # The game stores Playtime under a fixed hash that does not match
+            # its display name in every save version.
+            playtime = self.u32_hash(0xe573f564)
+        path = self.hero_path()
         return {
             'hearts': {'current': life / 4.0, 'max': max_life / 4.0},
             'stamina': {'max': (self.f32('PlayerStatus.MaxStamina') or 0) / 1000.0},
@@ -227,6 +238,9 @@ class Save:
             'layer': layer,
             'map_layer': raw_layer,
             'playtime': playtime,
+            'deaths': path['deaths_count'] if path else None,
+            'path_distance': path['distance'] if path else None,
+            'path_points': path['points'] if path else None,
             'sages': sages,
             'abilities': abilities,
             'equipped': self.equipment(),
@@ -241,6 +255,93 @@ class Save:
                 continue
             x, y, z = positions[i]
             out.append({'index': int(index), 'x': x, 'y': y, 'z': z})
+        return out
+
+    # --- Hero's Path ----------------------------------------------------------
+
+    def footprint_path(self):
+        if not self.path:
+            return None
+        path = os.path.join(os.path.dirname(self.path), 'footprint.sav')
+        return path if os.path.isfile(path) else None
+
+    def hero_path(self, step=6.0):
+        """Read footprint.sav and return drawable Hero's Path segments.
+
+        Each footprint is a packed 32-bit word: 13-bit X magnitude, 12-bit Z
+        magnitude, sign bits, a two-bit layer, and warp/death flags. Points are
+        quantized to four world units. Segments break on layer changes, warps,
+        and deaths so the line never cuts across the map.
+        """
+        path = self.footprint_path()
+        if not path:
+            return None
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None
+        if self._footprint is not None and self._footprint_mtime == mtime:
+            return self._footprint
+        with open(path, 'rb') as f:
+            raw = f.read()
+        if len(raw) < 364 + 4:
+            return None
+        count = struct.unpack_from('<I', raw, 76)[0]
+        count = min(count, (len(raw) - 364) // 4)
+        limit = step * step
+        segments = []
+        deaths = []
+        distance = 0.0
+        total = 0
+        layer = None
+        points = None
+        last = None
+        for i in range(count):
+            value = struct.unpack_from('<I', raw, 364 + i * 4)[0]
+            x = (value >> 6) & 0x1fff
+            if value & (1 << 5):
+                x = -x
+            z = (value >> 20) & 0xfff
+            if not value & (1 << 19):
+                z = -z
+            point_layer = (value >> 3) & 3
+            if point_layer == 3:
+                continue
+            warp = bool(value & 4)
+            death = bool(value & 2)
+            if death:
+                deaths.append({'layer': point_layer, 'x': x, 'z': z})
+            same_layer = points is not None and point_layer == layer
+            if same_layer:
+                dx = x - last[0]
+                dz = z - last[1]
+                if dx * dx + dz * dz >= limit:
+                    distance += math.sqrt(dx * dx + dz * dz)
+                    points.extend((x, z))
+                    last = (x, z)
+                    total += 1
+            if warp or death:
+                # The flag marks the point where the next recorded position
+                # jumps, so close this segment here and start fresh after it.
+                points = None
+                last = None
+                layer = None
+                continue
+            if not same_layer:
+                points = [x, z]
+                segments.append({'layer': point_layer, 'points': points})
+                last = (x, z)
+                layer = point_layer
+                total += 1
+        out = {
+            'segments': segments,
+            'deaths': deaths,
+            'points': total,
+            'deaths_count': len(deaths),
+            'distance': distance,
+        }
+        self._footprint = out
+        self._footprint_mtime = mtime
         return out
 
     # --- inventory ------------------------------------------------------------
