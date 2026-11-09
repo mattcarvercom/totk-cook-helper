@@ -128,21 +128,29 @@ seconds (default 15).
 
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
-rather than the pause map's last viewed layer. Layer and marker filters are in
-the left pane. Click a marker for its name, position and distance from Link,
-or use **Near Link** on the right to see the closest collectibles first. Show
-all or hide all marker categories from the left pane.
+rather than the pause map's last viewed layer. Layer buttons, marker filters,
+search and the reveal checkbox are in the left pane; zoom buttons float on the
+map. **Show undiscovered map** is off by default, so the map starts with the
+areas you have revealed through Skyview Towers and Lightroots. Travel
+Medallions and Skyview Towers appear when the save has them. Marker details
+and **Near Link** or **Results** are on the right, with game-style X/Y/Z
+coordinates and a direction arrow from Link.
 Completion lists every tracked category and can show only missing entries.
-The armor page shows every set, the owned level, and the materials needed for
-the next upgrade. Upgrade materials and material details have a **Sources**
-action: it lists shops with prices and stock, enemy drops with their spawn
-counts, and world spawns, then can pin those places on the map. Shops come from
-the actor packs' ShopParam data, drops from the enemy DropTable and horn mapping
-data, and spawns from the Banc map placements, all from your own game files.
+Armor shows each upgrade level and its materials, with a Ready or Need badge on
+the grid and a set-bonus level requirement on the detail. Upgrade materials
+and material details have a **Sources** action: it lists shops with prices and
+stock, enemy drops with their spawn counts, and world spawns, then can pin
+those places on the map. Shops come from the actor packs' ShopParam data,
+drops from the enemy DropTable and horn mapping data, and spawns from the Banc
+map placements, all from your own game files.
 
 The status page combines hearts, stamina wheels, energy cells, sages, special
-powers, and equipped gear, using the game's sage portraits and ability icons.
-The inventory opens on All, and the armor page opens with Owned only.
+powers, equipped gear, and active armor effects, using the game's sage
+portraits and ability icons. The inventory opens on All, and the armor page
+opens with Owned only. Weapons and shields show a fusion badge and the fused
+item in their details. New installs start with spoiler-free filters: Found map
+markers, photographed compendium entries, found progress entries, and the map
+limited to revealed areas.
 
 Each tab remembers its filters and view choices across restarts. Companion
 shortcuts: `/` focuses the active filter, `1` to `7` switch sections, `r`

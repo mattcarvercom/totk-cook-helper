@@ -83,32 +83,31 @@
         <aside class="map-left">
           <h3 class="label">Layers and markers</h3>
           <div class="seg map-layers" id="map-layers"></div>
+          <div class="seg map-found" id="map-found"></div>
+          <label class="filter map-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
+            <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place">
+            <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
+          </label>
           <div class="map-cat-actions">
             <button data-mcats="all">Show all</button>
             <button data-mcats="none">Hide all</button>
           </div>
+          <label class="map-reveal"><input type="checkbox" id="map-reveal"> <span>Show undiscovered map</span></label>
           <div class="map-cats" id="map-cats"></div>
         </aside>
         <div class="map-main">
-          <div class="map-toolbar">
-            <div class="seg" id="map-found"></div>
-            <label class="filter map-search">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></svg>
-              <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place">
-              <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
-            </label>
+          <div class="map-viewport" id="map-viewport">
+            <img id="map-img" alt="" draggable="false">
+            <canvas id="map-canvas"></canvas>
+            <div class="map-loading" id="map-loading">Loading map…</div>
+            <div class="map-compass" aria-hidden="true"><span>N</span></div>
             <div class="map-zoom">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>
               <button class="btn" id="map-zoomout" title="Zoom out">−</button>
               <button class="btn" id="map-fit" title="Fit map">Fit</button>
               <button class="btn" id="map-me" title="Center on Link">Link</button>
             </div>
-          </div>
-          <div class="map-viewport" id="map-viewport">
-            <img id="map-img" alt="" draggable="false">
-            <canvas id="map-canvas"></canvas>
-            <div class="map-loading" id="map-loading">Loading map…</div>
-            <div class="map-compass" aria-hidden="true"><span>N</span></div>
             <div class="minimap" id="minimap" title="Overview. Click or drag to move the map.">
               <img id="minimap-img" alt="" draggable="false">
               <canvas id="minimap-canvas"></canvas>
@@ -119,6 +118,7 @@
         <aside class="map-side">
           <div id="map-detail" class="map-detail"></div>
           <h3 class="label" id="map-near-title">Near Link</h3>
+          <div class="map-results-note" id="map-results-note" hidden></div>
           <div class="nearby" id="map-nearby"></div>
         </aside>
       </div>

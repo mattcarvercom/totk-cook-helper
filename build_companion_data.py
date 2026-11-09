@@ -126,6 +126,7 @@ EFFECT_NAME_OVERRIDES = {
 CATEGORIES = {
     'shrines': {'label': 'Shrines', 'color': '#7fd0ff', 'icon': 'shrine', 'kind': 'shrine'},
     'lightroots': {'label': 'Lightroots', 'color': '#c79bff', 'icon': 'lightroot', 'kind': 'lightroot'},
+    'towers': {'label': 'Skyview Towers', 'color': '#e8c56a', 'icon': 'tower', 'kind': 'tower'},
     'hidden_koroks': {'label': 'Korok seeds', 'color': '#9ee06e', 'icon': 'korok', 'kind': 'korok'},
     'carry_koroks': {'label': 'Korok friends', 'color': '#c8e887', 'icon': 'korok', 'kind': 'korok'},
     'bubbuls': {'label': 'Bubbuls', 'color': '#f4a259', 'icon': 'bubbul', 'kind': 'bubbul'},
@@ -151,6 +152,7 @@ CATEGORIES = {
 MAP_ICON_SOURCES = {
     'shrines': 'Nt_MapDungeonNew_02',
     'lightroots': None,
+    'towers': 'MapIconTower_00',
     'hidden_koroks': 'MapIconKorok_x2',
     'carry_koroks': 'MapIconKorok_x2',
     'bubbuls': 'MapIconCaveM_72x72',

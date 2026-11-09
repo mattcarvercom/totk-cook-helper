@@ -119,6 +119,13 @@ class Save:
             return None
         return (f32(self.b, o), f32(self.b, o + 4), f32(self.b, o + 8))
 
+    def vec3s(self, name):
+        o, n = self._array(name)
+        if o is None:
+            return []
+        return [(f32(self.b, o + i * 12), f32(self.b, o + i * 12 + 4),
+                 f32(self.b, o + i * 12 + 8)) for i in range(n)]
+
     def string(self, name):
         o = self.raw(name)
         if not o:
@@ -225,6 +232,17 @@ class Save:
             'equipped': self.equipment(),
         }
 
+    def travel_medallions(self):
+        indexes = self.ints('MapData.IconData.WarpMarkerData.Index')
+        positions = self.vec3s('MapData.IconData.WarpMarkerData.Pos')
+        out = []
+        for i, index in enumerate(indexes):
+            if index is None or index < 0 or i >= len(positions):
+                continue
+            x, y, z = positions[i]
+            out.append({'index': int(index), 'x': x, 'y': y, 'z': z})
+        return out
+
     # --- inventory ------------------------------------------------------------
 
     def _effect(self, cat, i):
@@ -241,6 +259,8 @@ class Save:
             names = self.strings('Pouch.%s.Content.Name' % cat)
             life = self.ints('Pouch.%s.Content.Life' % cat)
             extra = self.ints('Pouch.%s.Content.ExtraLife' % cat)
+            combined = self.strings('Pouch.%s.Content.Combined.Name' % cat)
+            combined_life = self.ints('Pouch.%s.Content.Combined.Life' % cat)
             eq = self.ints('Pouch.%s.EquipIndex' % cat)
             equipped = eq[0] if eq else -1
             items = []
@@ -253,6 +273,8 @@ class Save:
                     'life': life[i] if i < len(life) else None,
                     'extra': extra[i] if i < len(extra) else 0,
                     'effect': effect, 'effect_value': value,
+                    'fused': combined[i] if i < len(combined) and combined[i] else None,
+                    'fused_life': combined_life[i] if i < len(combined_life) else 0,
                 })
             cats[key] = items
         # armor

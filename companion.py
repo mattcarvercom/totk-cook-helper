@@ -114,11 +114,19 @@ def enrich_inventory(inv, catalog, cook):
             a = actor_entry(catalog, raw['actor'])
             if key in ('weapons', 'bows', 'shields'):
                 it['weapon'] = a.get('weapon') or {}
+                if raw.get('fused'):
+                    fused = actor_entry(catalog, raw['fused'])
+                    it['fused_name'] = fused.get('name') or raw['fused']
+                    it['fused_icon'] = fused.get('icon')
+                else:
+                    it.pop('fused', None)
+                    it.pop('fused_life', None)
             elif key == 'armor':
                 ar = armor_by_actor.get(raw['actor'])
                 if ar:
                     for k in ('slot', 'rank', 'defense', 'defense_next', 'next', 'set_key', 'set_name',
-                              'upgrade', 'price', 'upgradeable', 'effects', 'base'):
+                              'upgrade', 'price', 'upgradeable', 'effects', 'effect_info',
+                              'set_bonus', 'base'):
                         it[k] = ar.get(k)
                 else:
                     it['rank'] = 1
@@ -409,7 +417,8 @@ class App:
     def empty_payload(self):
         return {
             'version': self.version, 'data_version': self.data_version, 'save': self.save_status(),
-            'status': None, 'inventory': [], 'completion': None, 'compendium': [], 'cooking': {'dishes': [], 'materials': []},
+            'status': None, 'inventory': [], 'completion': None, 'compendium': [],
+            'cooking': {'dishes': [], 'materials': []}, 'travel_medallions': [],
             'settings': {k: v for k, v in self.s.items()}, 'platform': 'linux',
         }
 
@@ -425,6 +434,7 @@ class App:
             'completion': save.completion(),
             'compendium': save.compendium(),
             'cooking': build_cooking(inv, self.cook, self.catalog),
+            'travel_medallions': save.travel_medallions(),
             'settings': {k: v for k, v in self.s.items()},
             'platform': 'linux',
         }

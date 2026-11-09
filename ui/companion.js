@@ -14,12 +14,12 @@ const S = {
   settings: {}, booted: false, matCounts: {}, saves: [], selectedSave: '',
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
-  map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'all', search: '', sel: null,
-         fitted: false, layerSet: false, pending: null, raf: 0, drag: null, iconImages: {},
+  map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
+         reveal: false, fitted: false, layerSet: false, pending: null, raf: 0, drag: null, iconImages: {},
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
          miniDrag: false, miniRAF: 0 },
-  progress: { cat: 'overview', mode: 'missing', filter: '' },
-  comp: { group: '', state: '', filter: '', sel: null },
+  progress: { cat: 'overview', mode: 'found', filter: '' },
+  comp: { group: '', state: 'TakePhoto', filter: '', sel: null },
   cook: { filter: '', fx: '', sort: 'hearts', sel: null },
   modal: false,
   sourceModal: false,
@@ -151,6 +151,16 @@ function dist3(a, b) {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
 }
 function fmtDist(d) { return d === null ? '' : `${fmtNum(Math.round(d))} m`; }
+function gameCoord(v) {
+  const n = Math.round(Number(v) || 0);
+  return `${n < 0 ? '-' : ''}${String(Math.abs(n)).padStart(4, '0')}`;
+}
+function fmtXYZ(x, y, z) {
+  return `X ${gameCoord(x)} · Y ${gameCoord(y)} · Z ${gameCoord(z)}`;
+}
+function fmtXZ(x, z) {
+  return `X ${gameCoord(x)} · Z ${gameCoord(z)}`;
+}
 function layerLabel(l) { return l === 'sky' ? 'Sky' : l === 'depths' ? 'Depths' : 'Surface'; }
 function bearing(a, b) {
   if (!a || !b) return null;
@@ -273,6 +283,7 @@ function renderNav() {
   nav.querySelectorAll('svg').forEach((s) => { s.style.width = '16px'; s.style.height = '16px'; s.style.fill = 'none'; s.style.stroke = 'currentColor'; });
 }
 
+const SET_BONUS_LEVEL = 2;
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'armor', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -295,6 +306,7 @@ function restoreUiState(raw) {
   const map = raw.map || {};
   if (MAP_LAYERS.includes(map.layer)) { S.map.layer = map.layer; S.map.layerSet = true; }
   if (MAP_FOUND.includes(map.found)) S.map.found = map.found;
+  if (typeof map.reveal === 'boolean') S.map.reveal = map.reveal;
   if (typeof map.search === 'string') S.map.search = map.search;
   if (Array.isArray(map.cats)) {
     const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
@@ -323,8 +335,8 @@ function uiState() {
   return {
     inv: { cat: S.inv.cat, filter: S.inv.filter },
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
-    map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found, search: S.map.search,
-           cats: [...S.map.cats] },
+    map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
+           reveal: S.map.reveal, search: S.map.search, cats: [...S.map.cats] },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
     cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort },
@@ -356,8 +368,8 @@ async function start() {
   const savedCats = S.settings.ui_state && S.settings.ui_state.map &&
                     Array.isArray(S.settings.ui_state.map.cats);
   if (!savedCats) {
-    const defaults = ['shrines', 'lightroots', 'wells', 'chasms', 'old_maps', 'sages_wills',
-                      'schema_stones'];
+    const defaults = ['shrines', 'lightroots', 'towers', 'wells', 'chasms', 'old_maps',
+                      'sages_wills', 'schema_stones'];
     for (const c of defaults) S.map.cats.add(c);
   }
   loadMapIcons();
@@ -414,6 +426,14 @@ function loadMapIcons() {
     img.src = 'companion_data/' + file;
     S.map.iconImages[file] = img;
   });
+  const medallion = ainfo('Obj_WarpDLC_Prototype').icon;
+  if (medallion) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => requestDraw();
+    img.src = 'companion_data/icons/' + encodeURIComponent(medallion);
+    S.map.iconImages.medallion = img;
+  }
 }
 
 function mapIconFile(category, state) {
@@ -448,9 +468,10 @@ function equipCard(label, item, iconName, meta) {
     return `<button class="equip-card" data-invcat="${label === 'Head' || label === 'Body' || label === 'Legs' ? 'armor' : label.toLowerCase() + 's'}">` +
       `<span class="ico">${icon(iconName, 'g')}</span><span><span class="en">${esc(label)}</span><span class="ev dimmed">Empty</span></span></button>`;
   }
+  const fused = item.fused ? ` · Fused: ${item.fused_name || item.fused}` : '';
   return `<button class="equip-card" data-invactor="${esc(item.actor)}">` +
     `<span class="ico">${art(item)}</span><span><span class="en">${esc(label)}</span>` +
-    `<span class="ev">${esc(item.name)}</span><span class="em">${esc(meta || '')}</span></span></button>`;
+    `<span class="ev">${esc(item.name)}</span><span class="em">${esc((meta || '') + fused)}</span></span></button>`;
 }
 
 function findEquip(key, actor) {
@@ -530,13 +551,24 @@ function renderStatus() {
   const comp = d.completion || { categories: [], totals: { complete: 0, started: 0, total: 0 } };
   const cats = {};
   for (const c of comp.categories) cats[c.key] = c;
-  const compDone = (d.compendium || []).filter((x) => x.state !== 'Unopened').length;
   const weapon = findEquip('weapons', eq.weapons && eq.weapons.actor);
   const bow = findEquip('bows', eq.bows && eq.bows.actor);
   const shield = findEquip('shields', eq.shields && eq.shields.actor);
   const head = findEquip('armor', eq.armor_head && eq.armor_head.actor);
   const body = findEquip('armor', eq.armor_upper && eq.armor_upper.actor);
   const legs = findEquip('armor', eq.armor_lower && eq.armor_lower.actor);
+  const wornArmor = [head, body, legs].filter(Boolean);
+  const activeEffects = [];
+  const seenEffects = new Set();
+  for (const piece of wornArmor) {
+    for (const fx of piece.effect_info || []) {
+      if (!seenEffects.has(fx.name)) { seenEffects.add(fx.name); activeEffects.push(fx); }
+    }
+  }
+  const wornSetKey = wornArmor.length === 3 ? wornArmor[0].set_key : null;
+  const setBonusFx = wornSetKey &&
+    wornArmor.every((x) => x.set_key === wornSetKey && (x.rank || 1) >= SET_BONUS_LEVEL)
+    ? (wornArmor[0].set_bonus || []) : [];
   const matCount = invCat('materials').items.length;
   const foodCount = invCat('food').items.length;
   const quick = (label, catKey) => {
@@ -595,7 +627,7 @@ function renderStatus() {
       </div>
 
       <div class="status-meta">
-        <span>Position ${Math.round(pos.x || 0)}, ${Math.round(pos.y || 0)}, ${Math.round(pos.z || 0)}</span>
+        <span>${fmtXYZ(pos.x, pos.y, pos.z)}</span>
         <span>${esc(layer)}</span>
       </div>
 
@@ -608,6 +640,9 @@ function renderStatus() {
         ${equipCard('Body', body, 'body', body ? `Defense ${body.defense || 0}${body.rank ? ` · Lv ${body.rank}` : ''}` : '')}
         ${equipCard('Legs', legs, 'legs', legs ? `Defense ${legs.defense || 0}${legs.rank ? ` · Lv ${legs.rank}` : ''}` : '')}
       </div>
+      ${(activeEffects.length || setBonusFx.length)
+        ? `<h3 class="fx-gap">Link effects</h3><div class="tagrow">${effectChips(activeEffects, 'eff')}${effectChips(setBonusFx, 'bonus')}</div>`
+        : ''}
     </section>
 
     <section class="card status-side">
@@ -626,7 +661,6 @@ function renderStatus() {
         ${quick('Caves', 'caves')}
         ${quick('Bubbuls', 'bubbuls')}
         <button class="quick" data-page-go="progress"><span class="qk">Overall</span><span class="qv">${pct(comp.totals.complete, comp.totals.total)}<small>%</small></span><span class="qs">${comp.totals.total - comp.totals.complete - comp.totals.started} missing</span><span class="bar"><i style="width:${pct(comp.totals.complete, comp.totals.total)}%"></i></span></button>
-        <button class="quick" data-page-go="compendium"><span class="qk">Compendium</span><span class="qv">${compDone}<small> / ${(d.compendium || []).length}</small></span><span class="qs">${fmtNum(compDone)} entries logged</span><span class="bar"><i style="width:${pct(compDone, (d.compendium || []).length)}%"></i></span></button>
       </div>
     </section>
   </div>`;
@@ -645,8 +679,15 @@ function invCell(it, selected) {
     if (max > 0) dur = `<span class="dur${it.life / max < 0.25 ? ' low' : ''}"><i style="width:${clamp(it.life / max * 100, 0, 100)}%"></i></span>`;
   }
   const dim = it.category === 'Armor' && it.rank === undefined ? ' dim' : '';
+  let fused = '';
+  if (it.fused) {
+    const label = it.fused_name || it.fused;
+    fused = it.fused_icon
+      ? `<img class="fusebadge" src="companion_data/icons/${encodeURIComponent(it.fused_icon)}" alt="" title="Fused with ${esc(label)}">`
+      : `<span class="fusebadge glyph" title="Fused with ${esc(label)}">+</span>`;
+  }
   return `<button class="cell${dim}${dur ? ' has-dur' : ''}" role="option" aria-selected="${selected}" data-invkey="${esc(key)}" data-actor="${esc(it.actor)}">` +
-    `${it.equipped ? '<span class="eq"></span>' : ''}${badge}${art(it)}${dur}<span class="nm">${esc(it.name)}</span></button>`;
+    `${it.equipped ? '<span class="eq"></span>' : ''}${badge}${fused}${art(it)}${dur}<span class="nm">${esc(it.name)}</span></button>`;
 }
 
 function renderInventory() {
@@ -695,6 +736,12 @@ function renderInvDetail(it) {
   let body = '';
   if (it.category === 'Weapon' || it.category === 'Bow' || it.category === 'Shield') {
     body += durabilityHTML(it);
+    if (it.fused) {
+      const fuseIcon = it.fused_icon
+        ? `<img class="fuse-ico" src="companion_data/icons/${encodeURIComponent(it.fused_icon)}" alt="">`
+        : '';
+      body += `<div class="grid2"><dt>Fused with</dt><dd>${fuseIcon}${esc(it.fused_name || it.fused)}</dd></div>`;
+    }
     body += `<div class="grid2"><dt>Attack</dt><dd>${it.weapon && it.weapon.attack ? it.weapon.attack : '—'}</dd>`;
     if (it.effect) body += `<dt>Modifier</dt><dd>${esc(it.effect)}${it.effect_value ? ` +${it.effect_value}` : ''}</dd>`;
     body += `<dt>Sell</dt><dd>${fmtNum(it.sell)} rupees</dd></div>`;
@@ -791,16 +838,26 @@ function armorCell(p, selected) {
   const owned = !!p.owned;
   const lvl = owned ? (p.owned.rank || 1) : 0;
   const badge = owned ? `<span class="level">Lv ${lvl}</span>` : '';
+  const upg = (p.current && p.current.upgrade) || [];
+  const missing = upg.filter((u) => (S.matCounts[u.actor] || 0) < u.n).length;
+  const ready = upg.length > 0 && missing === 0;
+  let upstat = '';
+  if (upg.length && p.next) {
+    upstat = `<span class="upstat ${ready ? 'ready' : 'need'}" title="${ready ? 'Materials ready' : `${missing} material${missing === 1 ? '' : 's'} missing`}">${ready ? 'Ready' : `Need ${missing}`}</span>`;
+  } else if (!p.next && owned) {
+    upstat = '<span class="upstat max">MAX</span>';
+  }
   return `<button class="cell${owned ? '' : ' dim'}" role="option" aria-selected="${selected}" data-armor="${esc(p.base)}">` +
-    `${badge}${art({ icon: p.icon, name: p.name }, 'g')}<span class="nm">${esc(p.name)}</span></button>`;
+    `${badge}${upstat}${art({ icon: p.icon, name: p.name }, 'g')}<span class="nm">${esc(p.name)}</span></button>`;
 }
 
 function renderArmor() {
   const pieces = armorPieces();
   if (S.armor.set && !(cat().armor_sets || []).some((s) => s.key === S.armor.set)) S.armor.set = '';
   const slots = [['', 'All'], ['Head', 'Head'], ['Upper', 'Body'], ['Lower', 'Legs']];
+  const counted = S.armor.owned ? pieces.filter((p) => p.owned) : pieces;
   $('#armor-slots').innerHTML = slots.map(([k, l]) => {
-    const n = k ? pieces.filter((p) => p.slot === k).length : pieces.length;
+    const n = k ? counted.filter((p) => p.slot === k).length : counted.length;
     return `<button class="fxchip" data-slot="${k}" aria-pressed="${S.armor.slot === k}"><span>${l}</span><span class="c">${n}</span></button>`;
   }).join('');
   $('#armor-owned').setAttribute('aria-checked', String(S.armor.owned));
@@ -848,22 +905,34 @@ function renderArmorDetail(p) {
   if (!p) { el.innerHTML = ''; return; }
   const owned = !!p.owned;
   const current = p.current;
-  const next = p.next;
-  const nextDef = next ? next.defense : null;
-  const upg = current.upgrade || [];
-  const rows = upg.map((u) => {
-    const have = S.matCounts[u.actor] || 0;
-    const meta = ainfo(u.actor);
-    return `<button class="u${have < u.n ? ' miss' : ''}" data-srcmat="${esc(u.actor)}" title="Where to find ${esc(meta.name || u.actor)}">` +
-      `${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span>` +
-      `<span class="src">Sources</span></button>`;
-  }).join('');
-  let upgradeBlock;
-  if (!next) upgradeBlock = `<p class="note">This is the final upgrade. Defense ${current.defense || 0}.</p>`;
-  else if (!upg.length) upgradeBlock = `<p class="note">No upgrade materials are recorded for the next level.</p>`;
-  else upgradeBlock = `<h3 class="label">${owned ? 'Next upgrade' : 'To upgrade after finding it'}</h3>` +
-    `<div class="upg">${rows}</div><div class="grid2"><dt>Defense</dt><dd>${current.defense || 0} → ${nextDef || 0}</dd>` +
-    `<dt>Rupees</dt><dd>${fmtNum(current.price)}</dd></div>`;
+  const ranks = (p.ranks || []).slice().sort((a, b) => a.rank - b.rank);
+  const currentRank = owned ? (p.owned.rank || 1) : 0;
+  const panels = [];
+  for (const r of ranks) {
+    const upg = r.upgrade || [];
+    const nextRow = r.next ? ranks.find((x) => x.actor === r.next) : null;
+    if (!upg.length) continue;
+    const toRank = nextRow ? nextRow.rank : r.rank + 1;
+    const done = currentRank >= toRank;
+    const isNext = currentRank > 0 && r.rank === currentRank;
+    const rows = upg.map((u) => {
+      const have = S.matCounts[u.actor] || 0;
+      const meta = ainfo(u.actor);
+      return `<button class="u${have < u.n ? ' miss' : ''}" data-srcmat="${esc(u.actor)}" title="Where to find ${esc(meta.name || u.actor)}">` +
+        `${art(meta, 'i')}<span class="n">${esc(meta.name || u.actor)}</span><span class="c">${have} / ${u.n}</span>` +
+        `<span class="src">Sources</span></button>`;
+    }).join('');
+    panels.push(`<div class="upg-panel${isNext ? ' next' : ''}${done ? ' done' : ''}">` +
+      `<div class="upg-head"><span class="lv">Lv ${r.rank} → ${nextRow ? nextRow.rank : 'MAX'}</span>` +
+      (isNext ? '<span class="tag gold">Next</span>' : '') +
+      (done ? '<span class="tag">Done</span>' : '') + `</div>` +
+      `<div class="upg">${rows}</div>` +
+      `<div class="grid2"><dt>Defense</dt><dd>${r.defense || 0} → ${nextRow ? nextRow.defense : (r.defense || 0)}</dd>` +
+      `<dt>Rupees</dt><dd>${fmtNum(r.price)}</dd></div></div>`);
+  }
+  const upgradeBlock = panels.length
+    ? `<h3 class="label">Upgrades</h3>${panels.join('')}`
+    : `<p class="note">No upgrade materials are recorded for this piece.</p>`;
 
   const effects = current.effect_info || [];
   const effectBlock = `<h3 class="label">Effects</h3>` +
@@ -875,16 +944,26 @@ function renderArmorDetail(p) {
     .sort((a, b) => (slotOrder[a.slot] ?? 9) - (slotOrder[b.slot] ?? 9));
   const ownedPieces = setPieces.filter((x) => x.owned);
   const bonus = current.set_bonus || [];
+  const minRank = setPieces.length
+    ? Math.min(...setPieces.map((x) => x.owned ? (x.owned.rank || 1) : 0)) : 0;
+  const allOwned = setPieces.every((x) => x.owned);
+  const multiPiece = setPieces.length > 1;
+  const bonusReady = bonus.length > 0 && allOwned && minRank >= SET_BONUS_LEVEL;
   const pieceRows = setPieces.map((x) =>
     `<div class="setpiece"><span class="slot">${slotLabel(x.slot)}</span>` +
     `<span class="nm">${esc(x.name)}</span>` +
     `<span class="${x.owned ? 'ok' : 'no'}">${x.owned ? `Lv ${x.owned.rank || 1}` : 'Not owned'}</span></div>`
   ).join('');
+  const requirement = multiPiece
+    ? `Requires all ${setPieces.length} pieces at Lv ${SET_BONUS_LEVEL}+`
+    : `Requires this piece at Lv ${SET_BONUS_LEVEL}+`;
   const bonusBlock = bonus.length
     ? `<div class="setbonus"><div class="sb-head"><span class="tag gold">Set bonus</span>` +
-      `<span class="dim">${ownedPieces.length} of ${setPieces.length} pieces owned</span></div>` +
+      `<span class="tag ${bonusReady ? 'gold' : ''}">${bonusReady ? 'Unlocked' : requirement}</span></div>` +
       `<div class="tagrow">${effectChips(bonus, 'bonus')}</div>` +
-      `<div class="dim">Applies when the full set is equipped.</div></div>`
+      `<div class="dim">${bonusReady
+        ? 'All pieces meet the requirement. Applies when the full set is equipped.'
+        : `${ownedPieces.length} of ${setPieces.length} pieces owned${allOwned && multiPiece ? ` · lowest Lv ${minRank}` : ''}.`}</div></div>`
     : `<div class="dim">This set has no set bonus.</div>`;
   const setBlock = setPieces.length > 1 || bonus.length
     ? `<h3 class="label">Set</h3><div class="setbox"><div class="setname">${esc(p.set_name || 'Armor')}</div>` +
@@ -1113,6 +1192,7 @@ function mapVisible() {
   const m = cat().map;
   if (!m) return [];
   const states = (dyn().completion && dyn().completion.states) || [];
+  const sources = S.map.reveal ? null : revealSources(S.map.layer);
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
@@ -1121,6 +1201,7 @@ function mapVisible() {
     const st = states[i] || 0;
     if (S.map.found === 'missing' && st !== 0) continue;
     if (S.map.found === 'found' && st === 0) continue;
+    if (sources && !isRevealed(it, sources)) continue;
     out.push({ item: it, index: i, state: st });
   }
   return out;
@@ -1130,12 +1211,17 @@ function searchResults() {
   if (!q) return [];
   const p = playerPos();
   const states = (dyn().completion && dyn().completion.states) || [];
+  const revealCache = {};
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
     const st = states[i] || 0;
     if (S.map.found === 'missing' && st !== 0) continue;
     if (S.map.found === 'found' && st === 0) continue;
+    if (!S.map.reveal) {
+      const sources = revealCache[it.layer] || (revealCache[it.layer] = revealSources(it.layer));
+      if (!isRevealed(it, sources)) continue;
+    }
     const score = Math.max(fuzzyScore(q, it.name),
                            fuzzyScore(q, catMeta(it.cat).label) * 0.55);
     if (score > 0) out.push({ item: it, index: i, state: st, score: score });
@@ -1145,6 +1231,36 @@ function searchResults() {
     a.item.name.localeCompare(b.item.name));
   return out;
 }
+const REVEAL_RADII = {
+  towers: 2600, shrines: 320, lightroots: 700, locations: 320,
+};
+
+function revealSources(layer) {
+  const states = (dyn().completion && dyn().completion.states) || [];
+  const out = [];
+  for (let i = 0; i < (cat().collectibles || []).length; i++) {
+    const it = cat().collectibles[i];
+    if (it.layer !== layer) continue;
+    const st = states[i] || 0;
+    if (st <= 0) continue;
+    if (it.cat === 'lightroots' && st < 2) continue;
+    const radius = REVEAL_RADII[it.cat];
+    if (!radius) continue;
+    out.push({ x: it.x, z: it.z, r: radius });
+  }
+  const p = playerPos();
+  if (p && playerLayer() === layer) out.push({ x: p.x, z: p.z, r: 500 });
+  return out;
+}
+
+function isRevealed(item, sources) {
+  for (const s of sources) {
+    const dx = item.x - s.x, dz = item.z - s.z;
+    if (dx * dx + dz * dz <= s.r * s.r) return true;
+  }
+  return false;
+}
+
 function mapLayerCounts(layer) {
   const out = {};
   const states = (dyn().completion && dyn().completion.states) || [];
@@ -1222,6 +1338,8 @@ function renderMapToolbar() {
   $('#map-found').innerHTML = found.map(([k, l]) =>
     `<button data-found="${k}" aria-pressed="${S.map.found === k}">${l}</button>`).join('');
   $('#map-search').value = S.map.search;
+  const reveal = $('#map-reveal');
+  if (reveal) reveal.checked = !!S.map.reveal;
   updateSearchClear();
 }
 function updateSearchClear() {
@@ -1232,6 +1350,12 @@ function updateSearchClear() {
 function renderMapCats() {
   const counts = mapLayerCounts(S.map.layer);
   const el = $('#map-cats');
+  const medallions = (dyn().travel_medallions || []).filter((m) => medallionLayer(m.y) === S.map.layer);
+  const medIcon = ainfo('Obj_WarpDLC_Prototype').icon;
+  const medRow = medallions.length
+    ? `<div class="map-cat legend">${medIcon ? `<img class="mico" src="companion_data/icons/${encodeURIComponent(medIcon)}" alt="">` : ''}` +
+      `<span>Travel medallions</span><span class="n">${medallions.length}</span></div>`
+    : '';
   el.innerHTML = (cat().collectible_categories || []).filter((c) => counts[c.key]).map((c) => {
     const n = counts[c.key];
     const iconFile = (cat().map_icons || {})[c.key];
@@ -1240,7 +1364,7 @@ function renderMapCats() {
       : '';
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
       `${marker}<span>${esc(c.label)}</span><span class="n">${n.complete}/${n.total}</span></button>`;
-  }).join('');
+  }).join('') + medRow;
 }
 function renderMapDetail() {
   const el = $('#map-detail');
@@ -1258,7 +1382,7 @@ function renderMapDetail() {
     const iconFile = mapIconFile(item.cat, st);
     el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
       `<div class="k">Status</div><div class="v">${state}</div>` +
-      `<div class="k">Position</div><div class="v">${Math.round(item.x)}, ${Math.round(item.y)}, ${Math.round(item.z)}</div>` +
+      `<div class="k">Position</div><div class="v">${fmtXYZ(item.x, item.y, item.z)}</div>` +
       (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
       `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenter="${esc(item.id)}">Center</button>` +
       `<button class="btn" data-mprogress="${esc(item.cat)}">All ${esc(meta.label.toLowerCase())}</button></div>`;
@@ -1304,15 +1428,32 @@ function renderSourceDetail() {
     `<div class="d-sub">${sourceKindLabel(point.kind)} · ${layerLabel(point.layer)}</div></div></div>` +
     `<div class="k">Where</div><div class="v">${esc(point.label)}</div>` +
     `<div class="k">Detail</div><div class="v">${esc(point.meta)}</div>` +
-    `<div class="k">Position</div><div class="v">${Math.round(point.x)}, ${Math.round(point.y)}, ${Math.round(point.z)}</div>` +
+    `<div class="k">Position</div><div class="v">${fmtXYZ(point.x, point.y, point.z)}</div>` +
     (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
     `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
 }
+function renderResultsNote(searching) {
+  const note = $('#map-results-note');
+  if (!note) return;
+  if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
+  const bits = [];
+  if (S.map.found !== 'all') {
+    bits.push(`<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>`);
+  }
+  if (!S.map.reveal) bits.push('<span>explored areas only</span>');
+  if (!bits.length) { note.hidden = true; note.innerHTML = ''; return; }
+  note.hidden = false;
+  note.innerHTML = `<span>${bits.join(' · ')}</span>` +
+    (S.map.found !== 'all' ? '<button data-maprelax="found">Show all types</button>' : '') +
+    (!S.map.reveal ? '<button data-maprelax="reveal">Show full map</button>' : '');
+}
+
 function renderNearby() {
   const el = $('#map-nearby');
   const title = $('#map-near-title');
   const p = playerPos();
   const searching = S.map.search.trim() !== '';
+  renderResultsNote(searching);
   let items = searching ? searchResults() : mapVisible();
   if (!searching) {
     items.sort((a, b) => {
@@ -1455,6 +1596,28 @@ function requestDraw() {
   if (S.map.raf) return;
   S.map.raf = requestAnimationFrame(() => { S.map.raf = 0; drawMap(); });
 }
+function drawFog(ctx, w, h, pr) {
+  const sources = revealSources(S.map.layer);
+  ctx.save();
+  ctx.fillStyle = 'rgba(3,6,9,.88)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const s of sources) {
+    const sx = S.map.tx + pr.x(s.x) * S.map.zoom;
+    const sy = S.map.ty + pr.y(s.z) * S.map.zoom;
+    const rad = (pr.x(s.x + s.r) - pr.x(s.x)) * S.map.zoom;
+    if (sx + rad < 0 || sy + rad < 0 || sx - rad > w || sy - rad > h) continue;
+    const g = ctx.createRadialGradient(sx, sy, rad * 0.72, sx, sy, rad);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawMap() {
   const m = cat().map;
   if (!m) return;
@@ -1469,8 +1632,9 @@ function drawMap() {
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  const items = mapVisible(false);
   const pr = projection();
+  if (!S.map.reveal) drawFog(ctx, w, h, pr);
+  const items = mapVisible();
   const pts = [];
   for (const x of items) {
     const sx = S.map.tx + pr.x(x.item.x) * S.map.zoom;
@@ -1482,6 +1646,7 @@ function drawMap() {
   const base = clamp(3.2 + Math.log2(S.map.zoom + 1) * 1.7, 3, 10);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
   drawSources(ctx, w, h, pr);
+  drawMedallions(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
   const pos = playerPos();
   if (pos && S.map.layer === playerLayer()) {
@@ -1495,6 +1660,30 @@ function drawMap() {
 function requestMinimapDraw() {
   if (S.map.miniRAF) return;
   S.map.miniRAF = requestAnimationFrame(() => { S.map.miniRAF = 0; drawMinimap(); });
+}
+
+function drawMinimapFog(ctx, w, h, m) {
+  const sources = revealSources(S.map.layer);
+  const xr = m.world.x_max - m.world.x_min;
+  const zr = m.world.z_max - m.world.z_min;
+  ctx.save();
+  ctx.fillStyle = 'rgba(3,6,9,.88)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const s of sources) {
+    const px = (s.x - m.world.x_min) / xr * w;
+    const py = (s.z - m.world.z_min) / zr * h;
+    const rad = (s.r / xr) * w;
+    if (px + rad < 0 || py + rad < 0 || px - rad > w || py - rad > h) continue;
+    const g = ctx.createRadialGradient(px, py, rad * 0.72, px, py, rad);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(px, py, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawMinimap() {
@@ -1520,6 +1709,7 @@ function drawMinimap() {
     ctx.fillStyle = '#06090c';
     ctx.fillRect(0, 0, w, h);
   }
+  if (!S.map.reveal) drawMinimapFog(ctx, w, h, m);
   const vp = $('#map-viewport');
   const vw = vp.clientWidth, vh = vp.clientHeight;
   const left = clamp((0 - S.map.tx) / S.map.zoom, 0, m.width);
@@ -1682,6 +1872,40 @@ function drawSourceMarker(ctx, x, y, point, icon, selected) {
   }
   ctx.restore();
 }
+function medallionLayer(y) {
+  return y < -100 ? 'depths' : y > 1000 ? 'sky' : 'surface';
+}
+
+function drawMedallions(ctx, w, h, pr) {
+  const list = dyn().travel_medallions || [];
+  if (!list.length) return;
+  const icon = S.map.iconImages.medallion;
+  for (const m of list) {
+    if (medallionLayer(m.y) !== S.map.layer) continue;
+    const sx = S.map.tx + pr.x(m.x) * S.map.zoom;
+    const sy = S.map.ty + pr.y(m.z) * S.map.zoom;
+    if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
+    const r = clamp(10 + Math.log2(S.map.zoom + 3) * 2, 12, 24);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = 'rgba(6,10,8,.92)';
+    ctx.strokeStyle = '#e8c56a';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(0,0,0,.85)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    if (icon && icon.complete && icon.naturalWidth) {
+      const size = r * 1.35;
+      ctx.drawImage(icon, -size / 2, -size / 2, size, size);
+    }
+    ctx.restore();
+  }
+}
+
 function drawPlayer(ctx, x, y) {
   ctx.save();
   ctx.translate(x, y);
@@ -1747,7 +1971,7 @@ function updateMapCoords(clientX, clientY) {
   const x = m.world.x_min + (px / m.width) * (m.world.x_max - m.world.x_min);
   const z = m.world.z_min + (py / m.height) * (m.world.z_max - m.world.z_min);
   el.hidden = false;
-  el.textContent = `${layerLabel(S.map.layer)} · X ${Math.round(x)} · Z ${Math.round(z)}`;
+  el.textContent = `${layerLabel(S.map.layer)} · ${fmtXZ(x, z)}`;
 }
 
 /* ------------------------------------------------------------------ progress */
@@ -2002,6 +2226,13 @@ function attachStatic() {
     renderNearby();
     drawMap();
   });
+  const revealMap = $('#map-reveal');
+  if (revealMap) revealMap.addEventListener('change', (e) => {
+    S.map.reveal = !!e.target.checked;
+    renderNearby();
+    drawMap();
+    requestMinimapDraw();
+  });
   $('#progress-filter').addEventListener('input', (e) => { S.progress.filter = e.target.value; renderProgress(); });
   $('#comp-filter').addEventListener('input', (e) => { S.comp.filter = e.target.value; renderCompendium(); });
   $('#cook-filter').addEventListener('input', (e) => { S.cook.filter = e.target.value; renderCooking(); });
@@ -2119,7 +2350,7 @@ document.addEventListener('click', (e) => {
   if (!t) return;
   if (t.dataset.page) { showPage(t.dataset.page); return; }
   if (t.dataset.pageGo) { showPage(t.dataset.pageGo); return; }
-  if (t.dataset.invcat) { S.inv.cat = t.dataset.invcat; S.inv.sel = null; renderInventory(); return; }
+  if (t.dataset.invcat !== undefined) { S.inv.cat = t.dataset.invcat; S.inv.sel = null; renderInventory(); return; }
   if (t.dataset.invkey !== undefined) {
     S.inv.sel = t.dataset.invkey;
     $$('#inv-grid .cell').forEach((c) => c.setAttribute('aria-selected', String(c.dataset.invkey === S.inv.sel)));
@@ -2157,6 +2388,12 @@ document.addEventListener('click', (e) => {
   }
   if (t.dataset.layer) { setMapLayer(t.dataset.layer); return; }
   if (t.dataset.found) { S.map.found = t.dataset.found; renderMapToolbar(); renderNearby(); drawMap(); return; }
+  if (t.dataset.maprelax) {
+    if (t.dataset.maprelax === 'found') S.map.found = 'all';
+    else if (t.dataset.maprelax === 'reveal') S.map.reveal = true;
+    renderMapToolbar(); renderNearby(); drawMap(); requestMinimapDraw();
+    return;
+  }
   if (t.dataset.midx !== undefined) {
     const it = cat().collectibles[Number(t.dataset.midx)];
     if (it) {
