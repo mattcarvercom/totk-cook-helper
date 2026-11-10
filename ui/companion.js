@@ -2348,7 +2348,7 @@ function drawHeroPath(ctx, w, h, pr) {
   const data = S.map.pathData;
   if (!S.map.path || !data) return;
   const layer = S.map.layer === 'depths' ? 2 : S.map.layer === 'sky' ? 0 : 1;
-  const color = S.map.layer === 'depths' ? 'rgba(255, 143, 188, .62)'
+  const color = S.map.layer === 'depths' ? 'rgba(120, 255, 190, .68)'
     : S.map.layer === 'sky' ? 'rgba(255, 212, 121, .62)' : 'rgba(143, 231, 255, .62)';
   ctx.save();
   ctx.translate(S.map.tx, S.map.ty);

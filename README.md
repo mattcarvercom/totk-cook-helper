@@ -190,7 +190,8 @@ Medallions have their own toggle in the left pane, appear only on their layer,
 and use the game's medallion art without a background plate. A newly placed
 medallion appears as soon as live memory sees it. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
-current layer, with a point and distance summary. Link's green triangle points
+current layer, with a point and distance summary. The trail is cyan on the
+Surface, gold in the Sky, and mint in the Depths. Link's green triangle points
 in the direction Link faces in the save, using `PlayerStatus.SavePosRadY`. It
 gives a short sonar ping when the Map tab opens, when the map switches to
 Link's layer, or when **Link** is pressed. Three thick green rings start wide
