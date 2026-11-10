@@ -670,9 +670,9 @@ function applyLiveStatus(live) {
     if (S.map.follow) {
       if (S.map.layer !== layer) setMapLayer(layer);
       followLink(false);
-    } else if (prevLayer && prevLayer !== layer && S.map.layer === prevLayer) {
-      // Link fast traveled to another layer while the user was viewing his
-      // previous layer; follow him there instead of leaving a stale map up.
+    } else if (prevLayer && prevLayer !== layer) {
+      // Link fast traveled or dived to another layer; keep the map on the
+      // layer he is actually on instead of leaving a stale map up.
       setMapLayer(layer);
     }
     drawMap();
