@@ -279,9 +279,10 @@ Each tab remembers its filters and view choices across restarts. **Reset
 filters** in Settings restores the spoiler-free defaults. **Reset UI** clears
 pane sizes and collapsed panes, expands every map group, resets filters and
 search scope, and returns to Status. Settings also chooses
-the save slot and refresh interval, and includes **Rebuild now** to rebuild
-icons, maps, and item data from the game files without running a script by hand.
-**Check save now** only re-reads the save when its file time changed.
+the save slot and refresh interval, with **Check save now** beside the interval,
+and includes **Rebuild now** to rebuild icons, maps, and item data from the game
+files without running a script by hand. The **?** button opens About with build
+counts, credits, shortcuts, licenses, and the Nintendo disclaimer.
 Companion shortcuts: `/` focuses the active filter, `1` to `7` switch sections,
 `r` checks the save, and Esc clears a filter or closes settings. Auto follows
 the newest save.

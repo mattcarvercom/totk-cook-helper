@@ -25,6 +25,7 @@ const S = {
   comp: { group: '', state: 'TakePhoto', filter: '', sel: null },
   cook: { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1 },
   modal: false,
+  aboutModal: false,
   sourceModal: false,
   sourceActor: null,
 };
@@ -3435,6 +3436,39 @@ function renderCookDetail(it) {
 
 /* ------------------------------------------------------------------ settings */
 
+function openAbout(on) {
+  S.aboutModal = !!on;
+  const el = $('#about');
+  if (!el) return;
+  el.hidden = !on;
+  if (on) renderAbout();
+}
+
+function renderAbout() {
+  const meta = cat().meta || {};
+  const counts = meta.counts || {};
+  const built = meta.built ? new Date(meta.built * 1000).toLocaleString() : 'unknown';
+  $('#about').innerHTML = `<div class="modal-card about-card">` +
+    `<div class="set-head"><h2>About TotK Companion</h2><button class="btn" data-act="close-about">Close</button></div>` +
+    `<div class="about-sub">A read-only companion for The Legend of Zelda: Tears of the Kingdom. It reads your own game files and saves, never writes to them, and does not distribute game assets.</div>` +
+    `<div class="about-meta"><b>Built</b> ${esc(built)}<br><b>Game</b> ${esc(meta.game || 'your game files')}<br>${counts.actors || 0} actors · ${counts.armor || 0} armor · ${counts.compendium || 0} compendium · ${counts.collectibles || 0} collectibles · ${counts.map_icons || 0} map icons</div>` +
+    `<div class="about-group"><h3>Credits</h3><ul class="credits">` +
+      `<li><b>marcrobledo/savegame-editors</b><span>Save hashes and completion research.</span></li>` +
+      `<li><b>lud99/totk-unexplored</b><span>Collected and checked coordinate data.</span></li>` +
+      `<li><b>zeldamods/objmap-totk</b> and <b>radar-totk</b><span>Map regions, marker coordinates, and underlying object data.</span></li>` +
+      `<li><b>Zelda Dungeon</b> and <b>Zelda Wiki</b><span>Temple coordinates.</span></li>` +
+      `<li><b>KingFooZQ/Totk-Cooking-Simulator</b><span>Cooking rules and duration formula, MIT.</span></li>` +
+      `<li><b>Alegreya Sans</b><span>SIL Open Font License.</span></li>` +
+      `<li><b>Material Symbols</b> by Google<span>Apache License 2.0.</span></li>` +
+      `<li><b>Python, pywebview, WebKitGTK, Pillow</b><span>Application and image tooling.</span></li>` +
+    `</ul></div>` +
+    `<div class="about-group"><h3>Shortcuts</h3><div class="about-keys">` +
+      `<span><span class="kbd">/</span> filter</span><span><span class="kbd">r</span> check save</span><span><span class="kbd">1</span>-<span class="kbd">7</span> sections</span><span><span class="kbd">Esc</span> clear or close</span>` +
+    `</div></div>` +
+    `<div class="about-foot">TotK Companion is MIT licensed. The Legend of Zelda: Tears of the Kingdom and its assets are trademarks of Nintendo. This companion is unofficial and is not affiliated with or endorsed by Nintendo.</div>` +
+    `</div>`;
+}
+
 function openSettings(on) {
   S.modal = on;
   $('#settings').hidden = !on;
@@ -3469,33 +3503,44 @@ function rebuildStatusText() {
   return 'Rebuild icons, maps, and item data from the game files. This can take several minutes.';
 }
 function renderSettings() {
-  const meta = (cat().meta && cat().meta.counts) || {};
   const st = S.settings;
-  const built = cat().meta && cat().meta.built ? new Date(cat().meta.built * 1000).toLocaleString() : 'unknown';
-  $('#settings').innerHTML = `<div class="modal-card"><h2>Settings</h2><div class="sub">TotK Companion reads the newest save. It never writes to the save or to the game.</div>` +
-    `<div class="row"><span class="t">Always on top</span><button class="switch" data-setkey="on_top" role="switch" aria-checked="${!!st.on_top}"></button><span class="s">Keeps the window above the game in borderless fullscreen.</span></div>` +
-    `<div class="row"><span class="t">Start minimized</span><button class="switch" data-setkey="start_hidden" role="switch" aria-checked="${!!st.start_hidden}"></button><span class="s">Applies the next time the companion starts.</span></div>` +
-    `<div class="row"><span class="t">Save slot</span><select id="save-slot" class="select" style="max-width:230px" aria-label="Save slot"></select><span class="s">Auto shows the newest save. Pick a slot to keep the companion on one character.</span></div>` +
-    `<div class="row"><span class="t">Live memory</span><button class="btn" data-act="launch-game"${(dyn().save && dyn().save.live === 'on') ? ' disabled' : ''}>${(dyn().save && dyn().save.live === 'on') ? 'Live' : 'Launch TotK'}</button><span class="s">${esc(liveSettingsText())}</span></div>` +
-    `<div class="row"><span class="t">Refresh interval</span>${pollSelect()}<span class="s">The window checks for a newer save on this interval. Use Refresh now to check immediately.</span></div>` +
-    `<div class="row"><span class="t">Rebuild data</span><button class="btn" data-act="rebuild"${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? ' disabled' : ''}>${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? 'Rebuilding...' : 'Rebuild now'}</button><span class="s" id="rebuild-status">${esc(rebuildStatusText())}</span></div>` +
-    `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild after a game update or to refresh icons, maps, and item data.</span></div>` +
-    `<div class="row"><span class="t">Shortcuts</span><span class="s"><span class="kbd">/</span> filter · <span class="kbd">r</span> refresh · <span class="kbd">1</span>-<span class="kbd">7</span> sections · <span class="kbd">Esc</span> clear</span></div>` +
-    `<div class="actions"><button class="btn" data-act="reset-filters">Reset filters</button>` +
+  const sv = dyn().save || {};
+  const live = sv.live === 'on';
+  const liveNote = !live && sv.live_error ? liveSettingsText() : '';
+  const rb = sv.rebuild;
+  const rbActive = !!(rb && (rb.running || rb.error || rb.done)) || !!S.rebuildStarted;
+  const rebuildLabel = rb && rb.running ? 'Rebuilding...' : 'Rebuild now';
+  $('#settings').innerHTML = `<div class="modal-card settings-card">` +
+    `<div class="set-head"><h2>Settings</h2><button class="btn about-btn" data-act="about" title="About and credits" aria-label="About and credits">?</button></div>` +
+    `<div class="set-group"><h3>Window</h3>` +
+      `<div class="set-row" title="Keeps the window above the game in borderless fullscreen."><span class="t">Always on top</span><button class="switch" data-setkey="on_top" role="switch" aria-checked="${!!st.on_top}"></button></div>` +
+      `<div class="set-row" title="Applies the next time the companion starts."><span class="t">Start minimized</span><button class="switch" data-setkey="start_hidden" role="switch" aria-checked="${!!st.start_hidden}"></button></div>` +
+    `</div>` +
+    `<div class="set-group"><h3>Save data</h3>` +
+      `<div class="set-row" title="Auto shows the newest save. Pick a slot to keep the companion on one character."><span class="t">Save slot</span><select id="save-slot" class="select" aria-label="Save slot"></select></div>` +
+      `<div class="set-row" title="How often the companion checks for a newer save."><span class="t">Refresh</span><div class="set-inline">${pollSelect()}<button class="btn" data-act="refresh">Check save now</button></div></div>` +
+      `<div class="set-row" title="${esc(liveSettingsText())}"><span class="t">Live memory</span><div class="set-inline"><button class="btn" data-act="launch-game"${live ? ' disabled' : ''}>${live ? 'Live' : 'Launch TotK'}</button>${liveNote ? `<span class="s-inline">${esc(liveNote)}</span>` : ''}</div></div>` +
+      `<div class="set-row" title="Rebuild icons, maps, item data and labels from your game files. This can take several minutes."><span class="t">Rebuild data</span><div class="set-inline"><button class="btn" data-act="rebuild"${rb && rb.running ? ' disabled' : ''}>${rebuildLabel}</button><span class="s-inline" id="rebuild-status"${rbActive ? '' : ' hidden'}>${rbActive ? esc(rebuildStatusText()) : ''}</span></div></div>` +
+    `</div>` +
+    `<div class="set-actions"><button class="btn" data-act="reset-filters">Reset filters</button>` +
     `<button class="btn" data-act="reset-ui" title="Reset pane sizes, collapsed panes, map groups, filters, search scope, and the current tab.">Reset UI</button>` +
-    `<button class="btn" data-act="refresh">Check save now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
+    `<button class="btn" data-act="about">About</button>` +
+    `<button class="btn" data-act="close-settings">Done</button></div></div>`;
   renderSaves();
   const poll = $('#poll-interval');
   if (poll) poll.addEventListener('change', (e) => call('set_setting', 'poll_s', Number(e.target.value)));
 }
 function renderRebuildStatus() {
   const el = $('#rebuild-status');
-  if (!el) return;
-  el.textContent = rebuildStatusText();
   const rb = dyn().save && dyn().save.rebuild;
+  const pending = !!S.rebuildStarted && !(rb && (rb.running || rb.done || rb.error));
+  if (el) {
+    const active = pending || !!(rb && (rb.running || rb.error || rb.done));
+    el.hidden = !active;
+    el.textContent = active ? rebuildStatusText() : '';
+  }
   const btn = $('[data-act="rebuild"]');
   if (btn && rb) {
-    const pending = S.rebuildStarted && !rb.running && !rb.done && !rb.error;
     btn.disabled = !!rb.running || pending;
     btn.textContent = (rb.running || pending) ? 'Rebuilding...' : 'Rebuild now';
   }
@@ -3694,6 +3739,8 @@ function attachStatic() {
   $('#btn-settings').addEventListener('click', () => openSettings(!S.modal));
   const sourcesModal = $('#sources');
   if (sourcesModal) sourcesModal.addEventListener('click', (e) => { if (e.target === sourcesModal) closeSources(); });
+  const aboutModal = $('#about');
+  if (aboutModal) aboutModal.addEventListener('click', (e) => { if (e.target === aboutModal) openAbout(false); });
 
   const vp = $('#map-viewport');
   const ignoreMapDrag = (target) => target && target !== vp && target.closest &&
@@ -3947,6 +3994,8 @@ document.addEventListener('click', (e) => {
   }
   if (t.dataset.act === 'reset-filters') { resetFilters(); openSettings(false); return; }
   if (t.dataset.act === 'reset-ui') { resetUi(); return; }
+  if (t.dataset.act === 'about') { openAbout(true); return; }
+  if (t.dataset.act === 'close-about') { openAbout(false); return; }
   if (t.dataset.act === 'refresh') { call('refresh'); return; }
   if (t.dataset.act === 'launch-game') {
     t.disabled = true;
@@ -3990,6 +4039,7 @@ function openInventoryActor(actor) {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (S.aboutModal) { openAbout(false); e.preventDefault(); return; }
     if (S.sourceModal) { closeSources(); e.preventDefault(); return; }
     if (S.modal) { openSettings(false); e.preventDefault(); return; }
     const inp = document.activeElement;
