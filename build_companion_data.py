@@ -396,16 +396,16 @@ def compose_sky_display(surface_display, sky_display):
     mask = ImageChops.lighter(land, pale)
     mask = mask.filter(ImageFilter.MedianFilter(3))
     mask = mask.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
-    cloud = Image.blend(surface_display, sky_display, 0.35)
+    cloud = Image.blend(surface_display, sky_display, 0.50)
     # Make the cloud bed denser under and around the islands so the pale
     # islands stand out from Hyrule below. The surrounding map keeps the
-    # translucent 0.35 cloud veil. Build the soft bed at quarter scale so the
+    # translucent 0.50 cloud veil. Build the soft bed at quarter scale so the
     # large dilation stays cheap.
     small = mask.resize((max(1, mask.width // 4), max(1, mask.height // 4)),
                         Image.BILINEAR)
     small = small.filter(ImageFilter.MaxFilter(41)).filter(ImageFilter.GaussianBlur(8))
     bed = small.resize(mask.size, Image.BILINEAR)
-    thick = Image.blend(surface_display, sky_display, 0.82)
+    thick = Image.blend(surface_display, sky_display, 0.90)
     cloud = Image.composite(thick, cloud, bed)
     return Image.composite(sky_display, cloud, mask)
 
