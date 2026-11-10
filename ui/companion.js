@@ -387,6 +387,9 @@ function mapTracked(key) {
   const meta = catMeta(key);
   return !meta.map_only || !!meta.tracked;
 }
+function itemOnLayer(item, layer) {
+  return item.map_layers ? item.map_layers.includes(layer) : item.layer === layer;
+}
 function ainfo(actor) { return (cat().actors || {})[actor] || {}; }
 function invCat(key) {
   const list = (dyn().inventory || []);
@@ -1716,7 +1719,7 @@ function mapVisible() {
   const out = [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
-    if (it.layer !== S.map.layer || it.map_hidden) continue;
+    if (!itemOnLayer(it, S.map.layer) || it.map_hidden) continue;
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
@@ -1807,7 +1810,7 @@ function mapLayerCounts(layer) {
   const states = (dyn().completion && dyn().completion.states) || [];
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
-    if (it.layer !== layer || it.map_hidden) continue;
+    if (!itemOnLayer(it, layer) || it.map_hidden) continue;
     const tracked = mapTracked(it.cat);
     const st = states[i] || 0;
     if (!out[it.cat]) out[it.cat] = { all: 0, found: 0, missing: 0, matching: 0, tracked };
@@ -2008,7 +2011,8 @@ function renderMapDetail() {
     const deg = p ? bearing(p, item) : null;
     const state = st >= 2 ? 'Complete' : st === 1 ? 'Started' : 'Missing';
     const iconFile = item.icon || mapIconFile(item.cat, st);
-    el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(item.layer)}</div></div></div>` +
+    const layerName = itemOnLayer(item, S.map.layer) ? S.map.layer : item.layer;
+    el.innerHTML = `<div class="md-head">${iconFile ? `<img src="companion_data/${encodeURI(iconFile)}" alt="">` : ''}<div><h2>${esc(item.name)}</h2><div class="d-sub">${esc(meta.label)} · ${layerLabel(layerName)}</div></div></div>` +
       (only ? '' : `<div class="k">Status</div><div class="v">${state}</div>`) +
       `<div class="k">Position</div><div class="v">${fmtXYZ(item.x, item.y, item.z)}</div>` +
       (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
@@ -2107,7 +2111,7 @@ function renderNearby() {
     const only = !!meta.map_only;
     const state = only ? '' : x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
     const iconFile = x.item.icon || mapIconFile(x.item.cat, x.state);
-    const layer = x.item.layer !== S.map.layer ? layerLabel(x.item.layer) : '';
+    const layer = itemOnLayer(x.item, S.map.layer) ? '' : layerLabel(x.item.layer);
     const metaText = [meta.label, state, layer].filter(Boolean).join(' · ');
     return `<button data-midx="${x.index}">` +
       (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
@@ -2171,7 +2175,7 @@ function zoomAt(factor, cx, cy) {
 function centerOnItem(item) {
   const m = cat().map;
   if (!m) return;
-  if (item.layer !== S.map.layer) {
+  if (!itemOnLayer(item, S.map.layer)) {
     S.map.layer = item.layer;
     renderMapToolbar(); renderMapCats(); loadMapImage();
   }
@@ -2784,7 +2788,7 @@ function updateMapHover(clientX, clientY, target) {
   const item = hit.x.item;
   const meta = catMeta(item.cat);
   const state = meta.map_only ? '' : hit.x.state >= 2 ? 'Complete' : hit.x.state === 1 ? 'Started' : 'Missing';
-  const layer = item.layer !== S.map.layer ? layerLabel(item.layer) : '';
+  const layer = itemOnLayer(item, S.map.layer) ? '' : layerLabel(item.layer);
   tip.innerHTML = `<b>${esc(item.name)}</b><small>${esc([meta.label, state, layer].filter(Boolean).join(' · '))}</small>`;
   tip.hidden = false;
   tip.style.left = '0px'; tip.style.top = '0px';

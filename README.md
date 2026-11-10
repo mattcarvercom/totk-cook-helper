@@ -145,7 +145,8 @@ zoom buttons float on the map. Villages, stables, Great Fairies, tech labs, shop
 dispensers, challenges, temples and landmarks are separate map layers, each with
 its game marker art, including the shrine gate, lightroot bulb, player arrow,
 and a per-temple icon for the five main dungeons. Temples sit directly below
-Skyview Towers in the layer list.
+Skyview Towers in the layer list. Chasm mouths appear on both the Surface and
+Depths maps.
 Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list runs from
 fast travel and major places down to collectibles instead of sorting by marker

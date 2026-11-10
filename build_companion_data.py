@@ -916,6 +916,9 @@ class Builder:
                 }
                 if key == 'locations' and skip_location_marker(row):
                     item['map_hidden'] = True
+                if key == 'chasms':
+                    # Chasm mouths are visible on both the surface and Depths maps.
+                    item['map_layers'] = ['surface', 'depths']
                 internal = row.get('internal_name') or row.get('id')
                 if internal:
                     item['internal'] = str(internal)

@@ -116,23 +116,22 @@ def player_state(pid, anchor=None, max_distance=None):
         if not p7:
             continue
         raw = read_mem(pid, p7 + 0x2b4, 12)
-        fwd = read_mem(pid, p7 + 0x2e0, 12)
-        if len(raw) != 12 or len(fwd) != 12:
+        quat = read_mem(pid, p7 + 0x2c0, 16)
+        if len(raw) != 12 or len(quat) != 16:
             continue
         x, y, z = struct.unpack('<3f', raw)
-        fx, fy, fz = struct.unpack('<3f', fwd)
+        qw, qx, qy, qz = struct.unpack('<4f', quat)
         if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
             continue
         if abs(x) > 12000 or abs(z) > 12000 or y < -5000 or y > 20000:
             continue
         if abs(x) < 1 and abs(y) < 1 and abs(z) < 1:
             continue
-        if not (math.isfinite(fx) and math.isfinite(fz)):
+        norm = qw * qw + qx * qx + qy * qy + qz * qz
+        if not (0.5 < norm < 1.5):
             continue
-        length = math.hypot(fx, fz)
-        if length < 0.25 or length > 1.8:
-            continue
-        heading = math.atan2(fx, fz)
+        heading = math.atan2(-2.0 * (qw * qy + qx * qz),
+                             1.0 - 2.0 * (qy * qy + qz * qz))
         if anchor is not None:
             d = math.hypot(x - anchor[0], z - anchor[1])
             if max_distance is not None and d > max_distance:
