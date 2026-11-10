@@ -167,8 +167,9 @@ Link centered while the game updates his live position; changing the zoom
 keeps him centered, and panning, **Fit**, a manual layer change, or a marker
 jump stops following. Follow is only available with live memory and the button
 says so when the companion is in save-file mode. In live mode the map starts
-on Link's current layer and switches automatically when Link fast travels or
-moves between the Surface, Sky, and Depths. The ping fades out
+on Link's current layer. After that it stays on the layer you choose; turn on
+Follow if you want it to switch with Link when he fast travels between the
+Surface, Sky, and Depths. The ping fades out
 smoothly instead of blinking off. Hovering a marker switches the cursor to a
 pointer and shows its name, layer, and state; place and fast travel names also
 appear as labels when you zoom in. Named regions, lakes, mountains, forests,
