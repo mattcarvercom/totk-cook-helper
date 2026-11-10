@@ -518,7 +518,7 @@ class App:
         """Refresh hearts, inventory, completion and medallions from live memory."""
         delay = LIVE_SAVE_POLL_S
         while not self.closing:
-            if self.live_pid and self.live_state is not None:
+            if self.live_pid:
                 try:
                     self.refresh_live_save()
                 except live_save.Unavailable:
