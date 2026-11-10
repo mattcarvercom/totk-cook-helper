@@ -1643,20 +1643,13 @@ class Builder:
             }
             out['shrines'] = states['shrines']['2']
 
-        # The lightroot map icon is the game's glowing checkpoint bulb. The
-        # inactive state is a dimmed copy so both states still use game art.
-        honor_path = 'UI/Tex/Icon/Obj_CheckPointHonor_00.bntx.zs'
-        honor = None
-        if honor_path in self.rf.files:
-            try:
-                honor = build_icons.decode_bntx(self.rf.read(honor_path)).convert('RGBA')
-            except Exception as e:
-                log('map icons: cannot decode %s: %s' % (honor_path, e))
-        if honor is not None:
-            dim = ImageEnhance.Brightness(ImageEnhance.Color(honor).enhance(0.25)).enhance(0.55)
+        # The Depths map uses the game's arrival-point diamond for lightroots.
+        # Tint the two states so the shape stays the game texture.
+        arrival = decode('LoadArrivalPoint_00')
+        if arrival is not None:
             states['lightroots'] = {
-                '0': save_icon('lightroots_missing', dim),
-                '2': save_icon('lightroots_done', honor),
+                '0': save_icon('lightroots_missing', tint_icon(arrival, '#3f6c85')),
+                '2': save_icon('lightroots_done', tint_icon(arrival, '#5ac8ff')),
             }
         else:
             gem = decode('Nt_MapDungeonNewF_01')
@@ -1667,8 +1660,8 @@ class Builder:
                     img.alpha_composite(g, (31, 14))
                 return img
             states['lightroots'] = {
-                '0': save_icon('lightroots_missing', lightroot('#6d5a8c')),
-                '2': save_icon('lightroots_done', lightroot('#b98cff')),
+                '0': save_icon('lightroots_missing', lightroot('#3f6c85')),
+                '2': save_icon('lightroots_done', lightroot('#5ac8ff')),
             }
         out['lightroots'] = states['lightroots']['2']
 

@@ -154,7 +154,8 @@ appear as labels when you zoom in. Named regions, lakes, mountains, forests,
 ruins, and other locations from the game's LocationArea data appear as
 free-floating labels above the map tiles and below markers. Region labels show
 at fit zoom; zone, area, and detail labels fade in as you zoom. **Place labels**
-in the left pane toggles them. **Reveal full map**
+in the left pane toggles them; **POI labels** toggles the names attached to
+markers such as shrines, towers, stables, and wells. **Reveal full map**
 is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
 remain visible over unexplored areas. The Sky layer draws the Hyrule base,

@@ -15,7 +15,7 @@ const S = {
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
-         reveal: false, labels: true, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
+         reveal: false, labels: true, poiLabels: true, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -502,6 +502,7 @@ function restoreUiState(raw) {
   if (MAP_FOUND.includes(map.found)) S.map.found = map.found;
   if (typeof map.reveal === 'boolean') S.map.reveal = map.reveal;
   if (typeof map.labels === 'boolean') S.map.labels = map.labels;
+  if (typeof map.poi_labels === 'boolean') S.map.poiLabels = map.poi_labels;
   if (typeof map.medals === 'boolean') S.map.medals = map.medals;
   if (typeof map.path === 'boolean') S.map.path = map.path;
   if (typeof map.search === 'string') S.map.search = map.search;
@@ -542,7 +543,8 @@ function uiState() {
     inv: { cat: S.inv.cat, filter: S.inv.filter },
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
-           reveal: S.map.reveal, labels: S.map.labels, medals: S.map.medals, path: S.map.path,
+           reveal: S.map.reveal, labels: S.map.labels, poi_labels: S.map.poiLabels,
+           medals: S.map.medals, path: S.map.path,
            search: S.map.search, cats: [...S.map.cats], cat_version: 3 },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
@@ -1904,6 +1906,8 @@ function renderMapToolbar() {
   if (reveal) reveal.checked = !!S.map.reveal;
   const labels = $('#map-labels');
   if (labels) labels.checked = !!S.map.labels;
+  const poiLabels = $('#map-poi-labels');
+  if (poiLabels) poiLabels.checked = !!S.map.poiLabels;
   const path = $('#map-path');
   if (path) path.checked = !!S.map.path;
   renderMapPathNote();
@@ -2310,7 +2314,7 @@ function drawMap() {
   pts.sort((a, b) => (b.x.state - a.x.state) || (a.x.item.id === S.map.sel ? 1 : 0) - (b.x.item.id === S.map.sel ? 1 : 0));
   S.map.hitPoints = pts;
   const base = clamp(3.2 + Math.log2(S.map.zoom + 1) * 1.7, 3, 10);
-  const markerLabels = placeMapLabels(ctx, pts, w, h);
+  const markerLabels = S.map.poiLabels ? placeMapLabels(ctx, pts, w, h) : [];
   drawRegionLabels(ctx, pts, w, h, pr, markerLabels);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
   drawMapLabels(ctx, markerLabels);
@@ -3264,6 +3268,11 @@ function attachStatic() {
   const labelMap = $('#map-labels');
   if (labelMap) labelMap.addEventListener('change', (e) => {
     S.map.labels = !!e.target.checked;
+    drawMap();
+  });
+  const poiLabelMap = $('#map-poi-labels');
+  if (poiLabelMap) poiLabelMap.addEventListener('change', (e) => {
+    S.map.poiLabels = !!e.target.checked;
     drawMap();
   });
   const pathMap = $('#map-path');
