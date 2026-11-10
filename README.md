@@ -148,13 +148,19 @@ search, the reveal checkbox, and the place-label toggle are in the left pane;
 zoom buttons float on the map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges, temples and landmarks are separate map layers, each with
 its game marker art, including the shrine gate, lightroot bulb, player arrow,
-and a per-temple icon for the five main dungeons. Temples sit directly below
-Skyview Towers in the layer list. Chasm mouths appear on both the Surface and
-Depths maps.
+and a per-temple icon for the six dungeons, including Hyrule Castle. Temples
+sit directly below Skyview Towers in the layer list. Chasm mouths appear on
+both the Surface and Depths maps. Treasure chests, Large Zonaite deposits,
+cooking pots, Goddess statues, Bargainer statues, cherry trees, Lynels, Gloom
+Spawn and dungeon bosses are generated at build time from the game's Banc actor
+placements. The chest layer is generic: it names the chest type and position
+but not the randomized contents. Malanya Spring is the fifth Great Fairy and
+Forge Constructs complete the shop layer in the Depths and sky.
 Marker images are trimmed to their visible bounds so small icons such as wells
-use the same size on the map. The layer list runs from
-fast travel and major places down to collectibles instead of sorting by marker
-count. Found/Missing applies to every tracked marker layer, including shrines,
+use the same size on the map. The layer list is a two-column grid when the pane
+is wide enough and collapses to one scrolling column when it is narrow. It runs
+from fast travel and major places down to collectibles instead of sorting by
+marker count. Found/Missing applies to every tracked marker layer, including shrines,
 towers, lightroots, and place layers with complete discovery data: villages,
 stables, Great Fairies, Dragon's Tears, and device dispensers. All and Found
 show found/total; Missing shows missing/total and draws only the missing

@@ -440,11 +440,13 @@ const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'temples', 'village
                           'old_maps', 'sages_wills', 'schema_stones'];
 const MAP_CAT_ORDER = ['shrines', 'towers', 'temples', 'lightroots', 'stables', 'caves', 'villages',
                        'wells', 'great_fairies', 'labs', 'shops', 'dispensers',
-                       'challenges', 'dragon_tears', 'chasms', 'locations',
-                       'hidden_koroks', 'carry_koroks', 'bubbuls', 'hinoxes', 'taluses',
-                       'moldugas', 'flux_constructs', 'froxes', 'gleeoks', 'old_maps',
-                       'sages_wills', 'addison_signposts', 'schema_stones',
-                       'yiga_schematics'];
+                       'challenges', 'dragon_tears', 'chasms', 'cooking_pots',
+                       'goddess_statues', 'bargainers', 'cherry_trees', 'locations',
+                       'hidden_koroks', 'carry_koroks', 'bubbuls', 'large_zonaite',
+                       'treasure_chests', 'hinoxes', 'taluses', 'moldugas',
+                       'flux_constructs', 'froxes', 'gleeoks', 'lynels', 'gloom_spawns',
+                       'dungeon_bosses', 'old_maps', 'sages_wills', 'addison_signposts',
+                       'schema_stones', 'yiga_schematics'];
 const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
 const MAP_LABEL_MIN_ZOOM = {
   villages: 0.18, stables: 0.18, great_fairies: 0.20, labs: 0.22,
@@ -2056,7 +2058,7 @@ function renderMapCats() {
     const iconFile = (cat().map_icons || {})[c.key];
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
-      : '';
+      : `<span class="mico fallback" style="--c:${c.color}" aria-hidden="true"></span>`;
     const count = !n.tracked ? `${n.all}`
       : S.map.found === 'missing' ? `${n.missing}/${n.all}` : `${n.found}/${n.all}`;
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
@@ -2592,6 +2594,21 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath();
+  } else if (kind === 'statue') {
+    ctx.rect(x - r * 0.34, y - r * 0.2, r * 0.68, r);
+    ctx.moveTo(x + r * 0.32, y - r * 0.55);
+    ctx.arc(x, y - r * 0.55, r * 0.32, 0, Math.PI * 2);
+  } else if (kind === 'tree') {
+    ctx.arc(x, y - r * 0.35, r * 0.82, 0, Math.PI * 2);
+    ctx.rect(x - r * 0.12, y + r * 0.15, r * 0.24, r * 0.72);
+  } else if (kind === 'bargainer') {
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r * 0.78, y + r * 0.8);
+    ctx.lineTo(x - r * 0.78, y + r * 0.8);
+    ctx.closePath();
+  } else if (kind === 'cook') {
+    ctx.arc(x, y + r * 0.15, r * 0.8, 0, Math.PI * 2);
+    ctx.rect(x - r * 0.95, y - r * 0.12, r * 1.9, r * 0.2);
   } else {
     ctx.moveTo(x, y - r * 0.8); ctx.lineTo(x + r * 0.72, y); ctx.lineTo(x, y + r * 0.8); ctx.lineTo(x - r * 0.72, y); ctx.closePath();
   }
@@ -3270,7 +3287,7 @@ function setupPaneSizers() {
     const isMap = layout.classList.contains('map-layout');
     const varName = isMap ? (key === 'map-left' ? '--map-left-w' : '--map-side-w') : '--detail-w';
     const cssWidth = parseFloat(getComputedStyle(layout).getPropertyValue(varName));
-    const defaultW = Number.isFinite(cssWidth) ? cssWidth : (isMap ? (key === 'map-left' ? 235 : 330) : 340);
+    const defaultW = Number.isFinite(cssWidth) ? cssWidth : (isMap ? (key === 'map-left' ? 320 : 330) : 340);
     const state = { w: defaultW, collapsed: false };
     try {
       const raw = localStorage.getItem('totk.pane.' + key);

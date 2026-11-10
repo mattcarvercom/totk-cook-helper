@@ -26,6 +26,10 @@ or game files are included.
 The companion rebuilds all icons, names, map tiles, and map labels from the
 user's own game files at install time. The collectible list and the region
 polygons are the only pre-computed data files, and they are used read-only.
+The extra marker layers (treasure chests, Large Zonaite deposits, cooking pots,
+Goddess and Bargainer statues, cherry trees, Lynels, Gloom Spawn, dungeon bosses
+and Forge Constructs) are generated at build time from the game's
+`Banc` actor placements; they add no pre-computed coordinate files.
 
 `ui/material/` contains a small subset of
 [Material Symbols](https://fonts.google.com/icons) by Google, licensed under the

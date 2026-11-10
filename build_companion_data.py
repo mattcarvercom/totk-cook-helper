@@ -156,6 +156,15 @@ CATEGORIES = {
     'addison_signposts': {'label': 'Addison signs', 'color': '#e8c56a', 'icon': 'sign', 'kind': 'treasure'},
     'schema_stones': {'label': 'Schema stones', 'color': '#bfa8e0', 'icon': 'schema', 'kind': 'treasure'},
     'yiga_schematics': {'label': 'Yiga schematics', 'color': '#d98f8f', 'icon': 'yiga', 'kind': 'treasure'},
+    'treasure_chests': {'label': 'Treasure chests', 'color': '#d6c38a', 'icon': 'chest', 'kind': 'treasure'},
+    'large_zonaite': {'label': 'Large Zonaite deposits', 'color': '#9bd4a8', 'icon': 'ore', 'kind': 'treasure'},
+    'lynels': {'label': 'Lynels', 'color': '#e08a6a', 'icon': 'boss', 'kind': 'boss'},
+    'gloom_spawns': {'label': 'Gloom Spawn', 'color': '#c05a8a', 'icon': 'boss', 'kind': 'boss'},
+    'dungeon_bosses': {'label': 'Dungeon bosses', 'color': '#e0b26a', 'icon': 'boss', 'kind': 'boss'},
+    'cooking_pots': {'label': 'Cooking pots', 'color': '#f4a259', 'icon': 'cook', 'kind': 'cook'},
+    'goddess_statues': {'label': 'Goddess statues', 'color': '#f0d77a', 'icon': 'statue', 'kind': 'statue'},
+    'cherry_trees': {'label': 'Cherry trees', 'color': '#f4a6d7', 'icon': 'tree', 'kind': 'tree'},
+    'bargainers': {'label': 'Bargainer statues', 'color': '#b47fd0', 'icon': 'bargainer', 'kind': 'bargainer'},
 }
 
 # Place markers come from the game's LocationArea data and are map layers only;
@@ -170,12 +179,13 @@ SKIP_LOCATION_NAMES = {
     'Device Dispenser', 'Hateno Ancient Tech Lab', 'Tarrey Town Race',
     'Ultra Ball Haul Check-In', "Selmie's Spot", 'Gut Check Rock',
     'Flight Range', 'Southern Oasis Training Area', 'Sand-Seal Rental Shop',
-    'Break-a-Part Shop',
+    'Break-a-Part Shop', 'Malanya Spring', 'Hyrule Castle',
 }
 
 def skip_location_marker(row):
     name = row.get('display_name') or row.get('internal_name') or ''
-    return name.endswith('Stable') or name in SKIP_LOCATION_NAMES
+    return (name.endswith('Stable') or name in SKIP_LOCATION_NAMES or
+            'Bargainer' in name)
 
 # Map marker textures from UI/LayoutArchive/Common.blarc, timg/__Combined.bntx.
 # These are the game's own map icon shapes; each is tinted with its category color.
@@ -210,6 +220,12 @@ MAP_ICON_SOURCES = {
     'addison_signposts': 'MapIconBuildingNewsPaper_58x58',
     'schema_stones': 'MapIconRelief_00',
     'yiga_schematics': 'MapIconShopEvil_58x58',
+    'treasure_chests': 'MapIconTreasureBox_72x72',
+    'large_zonaite': 'MapIconOre_72x72',
+    'lynels': 'MapIconSkull_72x72',
+    'gloom_spawns': 'MapIconSkull_72x72',
+    'dungeon_bosses': 'MapIconSkull_72x72',
+    'cooking_pots': None,
 }
 MAP_ICON_FRAMES = {'shrines': 'Nt_MapDungeonNewF_01'}
 TEMPLE_ICON_SOURCES = {
@@ -218,6 +234,7 @@ TEMPLE_ICON_SOURCES = {
     'temple_water': 'MapIconDungeonLarge_L_ZolaIcon',
     'temple_lightning': 'MapIconDungeonLarge_L_GeldoIcon',
     'temple_spirit': 'MapIconDungeonLarge_L_LaumiIcon',
+    'temple_castle': 'MapIconDungeonLargeCastle',
 }
 MAP_ICON_ITEM_SOURCES = {
     'bubbuls': 'CaveMasterMedal',
@@ -225,6 +242,7 @@ MAP_ICON_ITEM_SOURCES = {
     'old_maps': 'Obj_TreasureMap_00',
     'schema_stones': 'Obj_AutoBuilderDraft_00',
     'yiga_schematics': 'Obj_AutoBuilderDraftAssassin_00',
+    'cooking_pots': 'Item_CookSet',
 }
 MAP_ICON_COLORS = {
     'shrines': '#4fb8f0', 'hidden_koroks': '#e6c15a', 'carry_koroks': '#f0d77a',
@@ -857,6 +875,7 @@ class Builder:
     def build_collectibles(self):
         src = json.load(open(os.path.join(DATA, 'collectibles.json'), encoding='utf-8'))
         location_rows = src.get('locations', [])
+        self.location_rows = location_rows
         places_path = os.path.join(DATA, 'map_places.json')
         if os.path.isfile(places_path):
             places = json.load(open(places_path, encoding='utf-8'))
@@ -973,6 +992,266 @@ class Builder:
                 cat['tracked'] = bool(cat_items) and all('hash' in x for x in cat_items)
         self.catalog['collectible_categories'] = categories
         self.catalog['collectibles'] = items
+
+    def build_extra_markers(self):
+        """Add map layers that come directly from Banc actor placements."""
+        place = self.collect_placements()
+        cats = {c['key']: c for c in self.catalog.get('collectible_categories', [])}
+        items = self.catalog.setdefault('collectibles', [])
+
+        def add_category(key, rows, map_only=True):
+            if not rows:
+                return
+            meta = CATEGORIES[key]
+            cat = cats.get(key)
+            if cat is None:
+                cat = {'key': key, 'label': meta['label'], 'color': meta['color'],
+                       'icon': meta['icon'], 'kind': meta['kind'], 'total': 0}
+                if map_only:
+                    cat['map_only'] = True
+                self.catalog.setdefault('collectible_categories', []).append(cat)
+                cats[key] = cat
+            base = cat.get('total') or 0
+            for i, row in enumerate(rows):
+                item = {
+                    'id': '%s:%d' % (key, base + i),
+                    'cat': key,
+                    'name': row.get('name') or meta['label'].rstrip('s'),
+                    'x': float(row['x']),
+                    'y': float(row['y']),
+                    'z': float(row['z']),
+                    'layer': row.get('layer') or 'surface',
+                    'kind': cat.get('kind') or meta['kind'],
+                }
+                if row.get('icon'):
+                    item['icon'] = row['icon']
+                if row.get('hash') is not None:
+                    item['hash'] = int(row['hash']) & 0xffffffff
+                if row.get('internal'):
+                    item['internal'] = row['internal']
+                items.append(item)
+            cat['total'] = base + len(rows)
+            log('extra markers: %-18s %4d' % (key, len(rows)))
+
+        # Treasure chests: every field chest actor, deduplicated by position.
+        chests = []
+        seen = set()
+        for actor, positions in place.items():
+            if not actor.startswith('TBox_Field_'):
+                continue
+            if 'Enemy_Assassin' in actor:
+                label = 'Yiga chest'
+            elif 'Enemy_Miasma' in actor:
+                label = 'Gloom chest'
+            elif 'Enemy' in actor:
+                label = 'Enemy chest'
+            elif 'Zonau' in actor:
+                label = 'Zonai chest'
+            elif 'Iron' in actor:
+                label = 'Iron chest'
+            elif 'Stone' in actor:
+                label = 'Stone chest'
+            elif 'Wood' in actor:
+                label = 'Wood chest'
+            else:
+                label = 'Treasure chest'
+            for x, y, z, layer in positions:
+                key = (layer, round(x), round(y), round(z))
+                if key in seen:
+                    continue
+                seen.add(key)
+                chests.append({'name': label, 'x': x, 'y': y, 'z': z,
+                               'layer': layer, 'internal': actor})
+        add_category('treasure_chests', chests)
+
+        # Large Zonaite deposits are the Depths-only ore actors.
+        zonaite = [{'name': 'Large Zonaite deposit', 'x': x, 'y': y, 'z': z,
+                    'layer': layer, 'internal': 'Item_Ore_L'}
+                   for x, y, z, layer in place.get('Item_Ore_L', [])
+                   if layer == 'depths']
+        add_category('large_zonaite', zonaite)
+
+        def lynel_name(actor):
+            if 'Middle' in actor:
+                rank = 'Blue-Maned '
+            elif 'Senior' in actor:
+                rank = 'White-Maned '
+            elif 'Dark' in actor:
+                rank = 'Silver '
+            else:
+                rank = ''
+            name = rank + 'Lynel'
+            return name + (' (Armored)' if 'Boss' in actor else '')
+
+        lynels = []
+        for actor, positions in place.items():
+            if not actor.startswith('Enemy_Lynel_'):
+                continue
+            for x, y, z, layer in positions:
+                lynels.append({'name': lynel_name(actor), 'x': x, 'y': y, 'z': z,
+                               'layer': layer, 'internal': actor})
+        add_category('lynels', lynels)
+
+        gloom = []
+        for actor, positions in place.items():
+            if not actor.startswith('MiasmaSwarm'):
+                continue
+            for x, y, z, layer in positions:
+                gloom.append({'name': 'Gloom Spawn', 'x': x, 'y': y, 'z': z,
+                              'layer': layer, 'internal': actor})
+        add_category('gloom_spawns', gloom)
+
+        boss_names = {'Rito': 'Colgera', 'Gerudo': 'Queen Gibdo',
+                      'Goron': 'Marbled Gohma', 'Zora': 'Mucktorok'}
+        bosses = []
+        for actor, positions in place.items():
+            if not (actor.startswith('Enemy_DungeonBoss_') and
+                    actor.endswith('_Underground')):
+                continue
+            name = next((v for k, v in boss_names.items() if k in actor),
+                        'Dungeon Boss')
+            for x, y, z, layer in positions:
+                bosses.append({'name': name, 'x': x, 'y': y, 'z': z,
+                               'layer': layer, 'internal': actor})
+        add_category('dungeon_bosses', bosses)
+
+        pots = []
+        for actor, positions in place.items():
+            if not actor.startswith('Item_CookSet'):
+                continue
+            for x, y, z, layer in positions:
+                pots.append({'name': 'Cooking pot', 'x': x, 'y': y, 'z': z,
+                             'layer': layer, 'internal': actor})
+        add_category('cooking_pots', pots)
+
+        goddess = []
+        for actor, positions in place.items():
+            if not (actor.startswith('TwnObj_GoddesStatue') or
+                    actor.startswith('TwnObj_SuperGoddesStatue') or
+                    actor.startswith('SkyObj_GoddesStatue') or
+                    actor == 'Npc_OasisGoddess' or
+                    actor.startswith('TwnObj_Village_SheikerGoddesStatuebib')):
+                continue
+            for x, y, z, layer in positions:
+                goddess.append((x, y, z, layer))
+        clusters = []
+        for x, y, z, layer in goddess:
+            for cluster in clusters:
+                if (cluster['layer'] == layer and
+                        math.dist((x, y, z), (cluster['x'], cluster['y'],
+                                              cluster['z'])) <= 30):
+                    break
+            else:
+                clusters.append({'name': 'Goddess Statue', 'x': x, 'y': y,
+                                 'z': z, 'layer': layer})
+        add_category('goddess_statues', clusters)
+
+        cherries = []
+        for actor, positions in place.items():
+            if not actor.startswith('Obj_TreeCherry_A_01'):
+                continue
+            for x, y, z, layer in positions:
+                cherries.append({'name': 'Cherry tree', 'x': x, 'y': y, 'z': z,
+                                 'layer': layer, 'internal': actor})
+        add_category('cherry_trees', cherries)
+
+        bargainers = []
+        for actor, positions in place.items():
+            if not (actor.startswith('TwnObj_DemonStatue_C_') or
+                    actor == 'TwnObj_DemonStatue_A_01'):
+                continue
+            for x, y, z, layer in positions:
+                bargainers.append({'name': 'Bargainer Statue', 'x': x, 'y': y,
+                                   'z': z, 'layer': layer, 'internal': actor})
+        add_category('bargainers', bargainers)
+
+        # The fifth Great Fairy is Malanya Spring. The LocationArea row has the
+        # completion hash, so the tracked layer keeps working.
+        locations = getattr(self, 'location_rows', [])
+        malanya = next((r for r in locations
+                        if r.get('display_name') == 'Malanya Spring'), None)
+        if malanya and malanya.get('completion_hash') is not None:
+            pos = malanya.get('position') or {}
+            add_category('great_fairies', [{
+                'name': 'Malanya Spring',
+                'x': pos.get('x', 0), 'y': pos.get('y', 0), 'z': pos.get('z', 0),
+                'layer': 'surface', 'hash': malanya['completion_hash'],
+                'internal': 'TwnObj_FairySpring_E_01',
+            }])
+
+        # Hyrule Castle is the sixth dungeon in the pause map.
+        castle = next((r for r in locations
+                       if r.get('display_name') == 'Hyrule Castle'), None)
+        if castle:
+            pos = castle.get('position') or {}
+            add_category('temples', [{
+                'name': 'Hyrule Castle',
+                'x': pos.get('x', 0), 'y': pos.get('y', 0), 'z': pos.get('z', 0),
+                'layer': 'surface', 'icon': 'mapicons/temple_castle.webp',
+                'internal': 'Hyrule Castle',
+            }])
+
+        # Forge Constructs fill the Depths and sky general-store gap. Several
+        # golem servants stand at one construct, so cluster them by position.
+        forge_raw = []
+        for actor, positions in place.items():
+            if not (actor.startswith('Npc_Zonau_Golem_Servant_Minus') or
+                    actor == 'Npc_Zonau_Golem_Servant_FirstIsland_22'):
+                continue
+            for x, y, z, layer in positions:
+                forge_raw.append((x, y, z, layer))
+        forge = []
+        for x, y, z, layer in forge_raw:
+            for cluster in forge:
+                if (cluster['layer'] == layer and
+                        math.dist((x, y, z), (cluster['x'], cluster['y'],
+                                              cluster['z'])) <= 80):
+                    break
+            else:
+                forge.append({'name': 'Forge Construct', 'x': x, 'y': y,
+                              'z': z, 'layer': layer})
+        add_category('shops', forge)
+
+    def collect_placements(self):
+        """Actor placements from every Banc cell, sky island, cave, and the Depths.
+
+        The extra map layers reuse this one scan instead of reading the
+        placement files again for every marker type.
+        """
+        if getattr(self, '_placements', None) is not None:
+            return self._placements
+
+        def layer_for(path):
+            if path.startswith('Banc/MinusField/'):
+                return 'depths'
+            if path.startswith('Banc/MainField/Sky/'):
+                return 'sky'
+            return 'surface'
+
+        place = collections.defaultdict(list)
+        placement_re = re.compile(
+            r'Banc/(?:MainField|MinusField)/[A-J]-\d+_(?:Static|Dynamic)\.bcett\.byml\.zs$')
+        placement_files = [
+            p for p in self.rf.files
+            if placement_re.match(p) or
+            ((p.startswith('Banc/MainField/Sky/') or p.startswith('Banc/MainField/Cave/'))
+             and p.endswith('.bcett.byml.zs'))
+        ]
+        for path in placement_files:
+            layer = layer_for(path)
+            try:
+                root = byml.Byml(self.rf.read(path)).root
+            except Exception:
+                continue
+            for actor in root.get('Actors', []):
+                name = actor.get('Gyaml')
+                pos = actor.get('Translate')
+                if not name or not pos or len(pos) < 3:
+                    continue
+                place[name].append((round(float(pos[0]), 1), round(float(pos[1]), 1),
+                                    round(float(pos[2]), 1), layer))
+        self._placements = place
+        return place
 
     # --- map labels -----------------------------------------------------------
 
@@ -1151,36 +1430,8 @@ class Builder:
             name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
             return re.sub(r'\d+$', '', name).strip() or name
 
-        def layer_for(path):
-            if path.startswith('Banc/MinusField/'):
-                return 'depths'
-            if path.startswith('Banc/MainField/Sky/'):
-                return 'sky'
-            return 'surface'
-
         # Placements: cell actors, sky islands, cave interiors, and the Depths.
-        place = collections.defaultdict(list)
-        placement_re = re.compile(
-            r'Banc/(?:MainField|MinusField)/[A-J]-\d+_(?:Static|Dynamic)\.bcett\.byml\.zs$')
-        placement_files = [
-            p for p in self.rf.files
-            if placement_re.match(p) or
-            ((p.startswith('Banc/MainField/Sky/') or p.startswith('Banc/MainField/Cave/'))
-             and p.endswith('.bcett.byml.zs'))
-        ]
-        for path in placement_files:
-            layer = layer_for(path)
-            try:
-                root = byml.Byml(self.rf.read(path)).root
-            except Exception:
-                continue
-            for actor in root.get('Actors', []):
-                name = actor.get('Gyaml')
-                pos = actor.get('Translate')
-                if not name or not pos or len(pos) < 3:
-                    continue
-                place[name].append((round(float(pos[0]), 1), round(float(pos[1]), 1),
-                                    round(float(pos[2]), 1), layer))
+        place = self.collect_placements()
 
         # Gear the rank-specific horn proxy: an enemy pack can carry several
         # mapping tables inherited from its templates, so pick the table whose
@@ -1726,6 +1977,7 @@ class Builder:
         self.catalog['fuse_names'] = self.attachment_names
         self.extract_sage_icons()
         self.build_collectibles()
+        self.build_extra_markers()
         self.build_map_labels()
         self.build_material_sources()
         if not self.skip_map:
