@@ -531,7 +531,13 @@ class App:
                     self.live_data_ok = False
                     self.live_save_error = 'the game exited'
                     delay = 10.0
-                except (live_save.NotReady, OSError) as e:
+                except live_save.NotReady:
+                    # The game has not published its save buffer yet. Retry
+                    # quickly so a freshly loaded save appears promptly.
+                    self.live_data_ok = False
+                    self.live_save_error = 'the live save buffer is not published yet'
+                    delay = 3.0
+                except OSError as e:
                     self.live_data_ok = False
                     self.live_save_error = str(e)[:120]
                     delay = 10.0
