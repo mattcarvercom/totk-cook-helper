@@ -2551,20 +2551,26 @@ function drawMap() {
   drawLabelFocus(ctx, w, h, pr);
   drawSources(ctx, w, h, pr);
   drawMedallions(ctx, w, h, pr);
-  // Link's position, only on the layer he is actually on.
+  // Link's position. On his layer use the green triangle and sonar; on the
+  // other layers show a translucent green dot at the same world position.
   const pos = playerPos();
+  const onPlayerLayer = !!pos && S.map.layer === playerLayer();
   const ping = $('#player-ping');
   const pingActive = S.map.pingUntil > performance.now();
   let pingShown = false;
-  if (pos && S.map.layer === playerLayer()) {
+  if (pos) {
     const sx = S.map.tx + pr.x(pos.x) * S.map.zoom;
     const sy = S.map.ty + pr.y(pos.z) * S.map.zoom;
     if (sx > -30 && sy > -30 && sx < w + 30 && sy < h + 30) {
-      drawPlayer(ctx, sx, sy);
-      if (pingActive && ping) {
-        ping.style.transform = `translate(${sx}px, ${sy}px)`;
-        ping.hidden = false;
-        pingShown = true;
+      if (onPlayerLayer) {
+        drawPlayer(ctx, sx, sy);
+        if (pingActive && ping) {
+          ping.style.transform = `translate(${sx}px, ${sy}px)`;
+          ping.hidden = false;
+          pingShown = true;
+        }
+      } else {
+        drawPlayerAway(ctx, sx, sy);
       }
     }
   }
@@ -2636,14 +2642,22 @@ function drawMinimap() {
   ctx.lineWidth = 2;
   ctx.strokeRect(rx, ry, rw, rh);
   const pos = playerPos();
-  if (pos && S.map.layer === playerLayer()) {
+  if (pos) {
     const pr = projection();
     const px = pr.x(pos.x) / m.width * w;
     const py = pr.y(pos.z) / m.height * h;
-    ctx.fillStyle = PLAYER_COLOR;
-    ctx.strokeStyle = 'rgba(5,8,10,.95)';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (S.map.layer === playerLayer()) {
+      ctx.fillStyle = PLAYER_COLOR;
+      ctx.strokeStyle = 'rgba(5,8,10,.95)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.62;
+      ctx.fillStyle = PLAYER_COLOR;
+      ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
   }
   if (S.map.sel) {
     const item = cat().collectibles.find((x) => x.id === S.map.sel);
@@ -2980,6 +2994,21 @@ function drawPlayer(ctx, x, y) {
   ctx.beginPath();
   ctx.moveTo(0, -11); ctx.lineTo(8, 8); ctx.lineTo(0, 4); ctx.lineTo(-8, 8); ctx.closePath();
   ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function drawPlayerAway(ctx, x, y) {
+  const r = clamp(5.5 + Math.log2(S.map.zoom + 3) * 1.25, 6, 12);
+  ctx.save();
+  ctx.globalAlpha = 0.62;
+  ctx.fillStyle = PLAYER_COLOR;
+  ctx.strokeStyle = 'rgba(5,8,10,.8)';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = 'rgba(92,255,127,.5)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 function hideMapTooltip() {

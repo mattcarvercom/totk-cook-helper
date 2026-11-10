@@ -204,7 +204,9 @@ Surface, gold in the Sky, and mint in the Depths. Link's green triangle points
 in the direction Link faces in the save, using `PlayerStatus.SavePosRadY`. It
 gives a short sonar ping when the Map tab opens, when the map switches to
 Link's layer, or when **Link** is pressed. Three thick green rings start wide
-and converge on Link instead of one ring expanding outward. The map cursor shows X, Y and Z in Purah Pad
+and converge on Link instead of one ring expanding outward. On the other two
+layers, a translucent green dot marks his world position, with no triangle and
+no sonar ring, so it is clear that it is not his current map. The map cursor shows X, Y and Z in Purah Pad
 order, using the game's terrain height grids for Z. Marker details and
 **Near Link** or **Results** are on the right, with game-style X/Y/Z
 coordinates and a direction arrow from Link. Empty detail or Nearby panels are
