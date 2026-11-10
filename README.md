@@ -106,15 +106,16 @@ cooking list. It is read-only: it never writes to the save or to the game.
 
 When the companion launches TotK itself, it also reads the game's live player
 actor and updates Link's map position and facing several times per second. It
-reads the game's in-memory progress buffer every two seconds, so hearts,
-stamina, rupees, equipment, inventory, armor, completion, compendium, cooking,
-and travel medallions follow the running game instead of waiting for a save.
-The selected save file still supplies the save caption, Hero's Path, and the
-fallback when live memory is unavailable. If TotK was started another way, the
-companion stays in save-file mode and the map marker moves when the game saves.
-Use **Settings > Launch TotK** or start the companion with `--launch-game`;
-this needs no sudo and no ptrace changes because the game is the companion's
-child process.
+finds the game's runtime material pouch in memory and reads the material
+counts live, so the cooking tab and the Materials list follow items as you pick
+them up, cook, or drop them. Hearts, stamina, rupees, equipment, armor,
+completion, compendium, and travel medallions still follow the newest save
+file, so they refresh when the game saves. The selected save file supplies the
+save caption, Hero's Path, and the fallback when live memory is unavailable.
+If TotK was started another way, the companion stays in save-file mode and the
+map marker moves when the game saves. Use **Settings > Launch TotK** or start
+the companion with `--launch-game`; this needs no sudo and no ptrace changes
+because the game is the companion's child process.
 
 Build the companion data once, and again after a game update:
 

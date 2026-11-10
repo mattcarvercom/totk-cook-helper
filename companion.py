@@ -3,9 +3,10 @@
 A read-only window over the newest Tears of the Kingdom save: status, inventory,
 armor upgrades, the map, completion tracking, the compendium, and cooking. It
 never writes to the save or the game. When the companion launches the game it
-also reads the game's in-memory copy of the save, so position, facing, hearts,
-inventory, and completion update while playing. If the game was started some
-other way the companion falls back to save-file polling.
+also reads the live player actor for position and facing, and the game's runtime
+material pouch for live cooking ingredients. Other data follows the save file.
+If the game was started some other way the companion falls back to save-file
+polling.
 
 Run from the repository root:
 
@@ -25,9 +26,11 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 
 import cook_core as cc
 import companion_core as core
+import live_pouch
 import live_save
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -42,6 +45,8 @@ LIVE_MARKER = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettemp
 POLL_S = 15.0
 LIVE_POLL_S = 0.25
 LIVE_SAVE_POLL_S = 2.0
+LIVE_POUCH_POLL_S = 0.5
+LIVE_POUCH_RETRY_S = 30.0
 MIN_POLL_S = 0.5
 SPINNER_MIN_S = 0.35
 
@@ -447,12 +452,22 @@ class App:
         self.live_data_thread = None
         self.live_save = None
         self.live_save_error = None
+        self.live_save_at = 0.0
         self.live_data_ok = False
         self.live_data_version = 0
+        self.live_pouch = None
+        self.live_pouch_state = 'off'
+        self.live_pouch_error = None
+        self.live_materials = None
+        self.live_pouch_thread = None
         self._live_fingerprint = None
+        self._payload_save = None
+        self._payload_materials = None
+        self._all_recipes_lock = threading.Lock()
         self._cook_cache_key = None
         self._cook_cache = None
         self._cook_lock = threading.Lock()
+        self._build_lock = threading.Lock()
         self._launch_requested = False
         try:
             signal.signal(signal.SIGUSR2, self._request_launch)
@@ -551,6 +566,9 @@ class App:
         if not (self.live_data_thread and self.live_data_thread.is_alive()):
             self.live_data_thread = threading.Thread(target=self.live_data_loop, daemon=True)
             self.live_data_thread.start()
+        if not (self.live_pouch_thread and self.live_pouch_thread.is_alive()):
+            self.live_pouch_thread = threading.Thread(target=self.live_pouch_loop, daemon=True)
+            self.live_pouch_thread.start()
 
     def live_loop(self):
         while not self.closing:
@@ -608,6 +626,8 @@ class App:
     def live_data_loop(self):
         """Refresh hearts, inventory, completion and medallions from live memory."""
         delay = LIVE_SAVE_POLL_S
+        last_error = None
+        was_ok = False
         while not self.closing:
             if self.live_pid:
                 try:
@@ -616,29 +636,172 @@ class App:
                     self.live_save = None
                     self.live_data_ok = False
                     self.live_save_error = 'the live save buffer is not readable'
+                    if was_ok:
+                        print('live data: save buffer is no longer readable',
+                              file=sys.stderr, flush=True)
+                    was_ok = False
                     delay = 10.0
                 except live_save.NotRunning:
                     self.live_save = None
                     self.live_data_ok = False
                     self.live_save_error = 'the game exited'
+                    was_ok = False
                     delay = 10.0
                 except live_save.NotReady:
                     # The game has not published its save buffer yet. Retry
                     # quickly so a freshly loaded save appears promptly.
                     self.live_data_ok = False
                     self.live_save_error = 'the live save buffer is not published yet'
+                    was_ok = False
                     delay = 3.0
-                except OSError as e:
+                except Exception as e:
+                    # A torn read while the game rewrites the buffer must not
+                    # stop live data for the rest of the session.
                     self.live_data_ok = False
-                    self.live_save_error = str(e)[:120]
-                    delay = 10.0
+                    self.live_save_error = '%s: %s' % (e.__class__.__name__, str(e)[:120])
+                    if self.live_save_error != last_error:
+                        print('live data: %s' % traceback.format_exc(),
+                              file=sys.stderr, flush=True)
+                        last_error = self.live_save_error
+                    was_ok = False
+                    delay = 5.0
                 else:
+                    if not was_ok:
+                        print('live data: save buffer readable', file=sys.stderr, flush=True)
                     self.live_data_ok = True
                     self.live_save_error = None
+                    last_error = None
+                    was_ok = True
                     delay = LIVE_SAVE_POLL_S
             else:
+                self.live_data_ok = False
+                was_ok = False
                 delay = LIVE_SAVE_POLL_S
             time.sleep(delay)
+
+    def material_pouch_info(self, save):
+        """Array length and save counts used to identify the live pouch."""
+        try:
+            n = save._array('Pouch.Material.Content.Name')[1]
+        except (AttributeError, KeyError, struct.error):
+            n = 0
+        try:
+            inv = save.inventory()
+        except Exception:
+            inv = {}
+        hint = {x['actor']: x['count'] for x in inv.get('materials', [])}
+        return n or len(hint), hint
+
+    def merge_materials(self, inv, counts):
+        """Put the live material counts into a save inventory in pouch order."""
+        order = [x['actor'] for x in inv.get('materials', [])]
+        seen = set(order)
+        out = []
+        for actor in order:
+            n = counts.get(actor, 0)
+            if n > 0:
+                out.append({'actor': actor, 'count': n})
+        for actor in sorted((a for a in counts if a not in seen),
+                            key=lambda a: (self.cook.name(a).lower(), a)):
+            n = counts[actor]
+            if n > 0:
+                out.append({'actor': actor, 'count': n})
+        inv['materials'] = out
+        return inv
+
+    def rebuild_live_payload(self):
+        """Publish a payload from the current save plus the live pouch counts."""
+        save = self._payload_save or self.save
+        if not save:
+            return
+        self.live_data_version += 1
+        payload = self.build(save, material_override=self.live_materials)
+        with self.lock:
+            self.version += 1
+            payload['version'] = self.version
+            payload['data_version'] = self.data_version
+            payload['live_data_version'] = self.live_data_version
+            payload['save'] = self.save_status()
+            self.payload = payload
+
+    def live_pouch_loop(self):
+        """Find and read the game's runtime material pouch."""
+        pouch = None
+        failed_at = 0.0
+        while not self.closing:
+            if not self.live_pid:
+                if pouch:
+                    pouch.close()
+                pouch = None
+                self.live_pouch = None
+                self.live_pouch_state = 'off'
+                self.live_pouch_error = None
+                self.live_materials = None
+                time.sleep(1.0)
+                continue
+            if pouch is None:
+                if time.time() - failed_at < LIVE_POUCH_RETRY_S:
+                    time.sleep(1.0)
+                    continue
+                save = self._payload_save or self.save
+                if not save:
+                    time.sleep(1.0)
+                    continue
+                n, hint = self.material_pouch_info(save)
+                if not n:
+                    time.sleep(1.0)
+                    continue
+                self.live_pouch_state = 'scanning'
+                self.push_status()
+                try:
+                    pouch = live_pouch.Pouch(self.live_pid)
+                    pouch.find(n, set(self.cook.mat), hint=hint,
+                               stop=lambda: self.closing)
+                except live_pouch.Gone as e:
+                    pouch = None
+                    failed_at = time.time()
+                    self.live_pouch_state = 'failed'
+                    self.live_pouch_error = str(e)[:120]
+                    self.push_status()
+                    print('live pouch: %s' % e, file=sys.stderr, flush=True)
+                    time.sleep(1.0)
+                    continue
+                except (live_save.Unavailable, OSError) as e:
+                    pouch = None
+                    failed_at = time.time()
+                    self.live_pouch_state = 'failed'
+                    self.live_pouch_error = str(e)[:120]
+                    self.push_status()
+                    print('live pouch: %s' % e, file=sys.stderr, flush=True)
+                    time.sleep(1.0)
+                    continue
+                self.live_pouch = pouch
+                self.live_pouch_state = 'on'
+                self.live_pouch_error = None
+                self.live_materials = None
+                self.push_status()
+                print('live pouch: material arrays found', file=sys.stderr, flush=True)
+            try:
+                inv = pouch.read()
+            except live_pouch.Gone as e:
+                pouch.close()
+                pouch = None
+                self.live_pouch = None
+                self.live_pouch_state = 'failed'
+                self.live_pouch_error = str(e)[:120]
+                self.live_materials = None
+                self.push_status()
+                failed_at = time.time()
+                time.sleep(1.0)
+                continue
+            if inv != self.live_materials:
+                self.live_materials = inv
+                self.live_pouch_error = None
+                self.rebuild_live_payload()
+            elif self.live_pouch_state != 'on':
+                self.live_pouch_state = 'on'
+                self.push_status()
+            time.sleep(LIVE_POUCH_POLL_S)
 
     def live_fingerprint(self, payload):
         status = payload.get('status') or {}
@@ -656,13 +819,26 @@ class App:
         if not self.live_save or self.live_save.pid != self.live_pid:
             self.live_save = live_save.LiveSave(
                 self.game, pid=self.live_pid, save_root=self.save_root)
-        data = self.live_save.read()
         # Use the selected save's footprint for Hero's Path; live progress
         # data comes from the game's in-memory buffer.
         path = self.save_path or self.live_save.save_path
-        save = core.Save(path, self.catalog,
-                         os.path.join(DATA, 'cookdata.json'), data=data)
-        payload = self.build(save)
+        override = self.live_materials if self.live_pouch_state == 'on' else None
+        # The game rewrites the buffer while it is read. A single torn
+        # snapshot can contain an array offset that is still being updated,
+        # so retry once from a fresh read before treating it as an error.
+        for attempt in range(2):
+            data = self.live_save.read()
+            try:
+                save = core.Save(path or self.live_save.save_path, self.catalog,
+                                 os.path.join(DATA, 'cookdata.json'), data=data)
+                payload = self.build(save, material_override=override)
+                break
+            except (struct.error, IndexError, ValueError, UnicodeError):
+                if attempt == 0:
+                    time.sleep(0.1)
+                    continue
+                raise
+        self.live_save_at = time.time()
         state = self.live_state
         if state and payload.get('status'):
             y = state['y']
@@ -749,15 +925,25 @@ class App:
         return self.save.hero_path() if self.save else None
 
     def all_recipes(self):
-        if not self.save:
-            return []
-        key = (self.save_path, self.data_version)
-        if self._all_recipes is not None and self._all_recipes_for == key:
-            return self._all_recipes
-        inv = self.save.inventory()
-        self._all_recipes = build_all_recipes(inv, self.cook, self.catalog)
-        self._all_recipes_for = key
-        return self._all_recipes
+        # Use the same material counts the visible payload was built from.
+        # In live mode those come from the game's runtime pouch.
+        counts = self._payload_materials
+        if counts is None:
+            save = self._payload_save or self.save
+            if not save:
+                return []
+            counts = {x['actor']: x['count']
+                      for x in save.inventory().get('materials', [])}
+        mat_key = tuple(sorted(counts.items()))
+        key = (self.data_version, mat_key)
+        with self._all_recipes_lock:
+            if self._all_recipes is not None and self._all_recipes_for == key:
+                return self._all_recipes
+            inv = {'materials': [{'actor': a, 'count': n} for a, n in counts.items()]}
+            rows = build_all_recipes(inv, self.cook, self.catalog)
+            self._all_recipes = rows
+            self._all_recipes_for = key
+            return rows
 
     def ack_rebuild(self):
         if not self.rebuild_state['running']:
@@ -877,10 +1063,12 @@ class App:
             if path and (force or path != self.save_path or mtime != self.save_mtime):
                 self.checking = True
                 self.push_status()
-                if self.live_active and self.live_data_ok:
+                if self.live_data_ok:
                     # Live memory is authoritative. Keep the disk path and
                     # caption current for fallback, but do not overwrite the
                     # live payload with a save that may be many minutes old.
+                    # Position can be unavailable in menus while the save
+                    # data remains current, so do not require live_active.
                     self.save_path, self.save_mtime = path, mtime
                     self.save = core.Save(path, self.catalog,
                                           os.path.join(DATA, 'cookdata.json'))
@@ -936,10 +1124,17 @@ class App:
         return {'slot': os.path.basename(os.path.dirname(self.save_path)) if self.save_path else None,
                 'path': self.save_path, 'dir': os.path.dirname(self.save_path) if self.save_path else None,
                 'caption': caption, 'caption_v': caption_v,
-                'mtime': self.live_at if self.live_active else self.save_mtime,
+                'mtime': (self.live_save_at if self.live_data_ok
+                          else self.live_at if self.live_active
+                          else self.save_mtime),
                 'error': self.error,
                 'live': 'on' if self.live_active else 'off',
                 'live_error': self.live_error,
+                'live_data': 'on' if self.live_data_ok else 'off',
+                'live_data_error': self.live_save_error,
+                'live_data_at': self.live_save_at,
+                'live_pouch': self.live_pouch_state,
+                'live_pouch_error': self.live_pouch_error,
                 'checking': self.checking, 'next_scan': self.next_scan, 'poll_s': self.poll_s,
                 'rebuild': dict(self.rebuild_state)}
 
@@ -969,8 +1164,14 @@ class App:
             'settings': {k: v for k, v in self.s.items()}, 'platform': 'linux',
         }
 
-    def build(self, save):
+    def build(self, save, material_override=None):
+        with self._build_lock:
+            return self._build(save, material_override)
+
+    def _build(self, save, material_override=None):
         inv = save.inventory()
+        if material_override is not None:
+            inv = self.merge_materials(inv, material_override)
         status = save.status()
         status['inventory_counts'] = {k: sum(1 for _ in inv.get(k, [])) for k in core.CATEGORY_ORDER}
         status['inventory_counts']['arrows'] = inv.get('arrows', [{}])[0].get('count', 0) if inv.get('arrows') else 0
@@ -995,6 +1196,9 @@ class App:
             'settings': {k: v for k, v in self.s.items()},
             'platform': 'linux',
         }
+        self._payload_save = save
+        self._payload_materials = {x['actor']: x['count']
+                                   for x in inv.get('materials', [])}
         return payload
 
 

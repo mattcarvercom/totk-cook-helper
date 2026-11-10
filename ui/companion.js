@@ -23,7 +23,7 @@ const S = {
          miniDrag: false, miniRAF: 0 },
   progress: { cat: 'overview', mode: 'found', filter: '' },
   comp: { group: '', state: 'TakePhoto', filter: '', sel: null },
-  cook: { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1 },
+  cook: { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1, allPending: null },
   modal: false,
   aboutModal: false,
   sourceModal: false,
@@ -605,7 +605,7 @@ function resetFilters() {
   S.map.sources = [];
   S.progress = { cat: 'overview', mode: 'found', filter: '' };
   S.comp = { group: '', state: 'TakePhoto', filter: '', sel: null };
-  S.cook = { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1 };
+  S.cook = { filter: '', fx: '', sort: 'hearts', sel: null, all: false, allRows: null, allFor: -1, allPending: null };
   saveUiState();
   renderPage(S.page, true);
   if (S.page === 'map') {
@@ -694,14 +694,10 @@ async function poll(first) {
       if (changed) {
         S.map.pathData = null;
         S.map.pathFor = -1;
-        S.cook.allRows = null;
-        S.cook.allFor = -1;
         renderPage(S.page);
         renderStatusLine();
         document.documentElement.dataset.ready = '1';
       } else if (liveChanged) {
-        S.cook.allRows = null;
-        S.cook.allFor = -1;
         if (S.page === 'map') {
           renderMapCats();
           renderNearby();
@@ -3331,6 +3327,7 @@ const SORT_FN = {
   effect: (a, b) => (!a.effect_name - !b.effect_name) || (a.effect_name || '').localeCompare(b.effect_name || '') || heartScore(b) - heartScore(a) || byName(a, b),
 };
 const fxKey = (d) => d.effect || 'none';
+function cookVersionKey() { return `${S.dataVersion}:${S.liveDataVersion}`; }
 function cookBaseRows() {
   const dishes = (dyn().cooking && dyn().cooking.dishes) || [];
   if (S.cook.all && S.cook.allRows) return S.cook.allRows;
@@ -3354,11 +3351,16 @@ function cookItems() {
   return list;
 }
 async function ensureAllRecipes() {
-  if (S.cook.allRows && S.cook.allFor === S.dataVersion) return S.cook.allRows;
-  const rows = await call('all_recipes');
-  S.cook.allRows = Array.isArray(rows) ? rows : [];
-  S.cook.allFor = S.dataVersion;
-  return S.cook.allRows;
+  const key = cookVersionKey();
+  if (S.cook.allRows && S.cook.allFor === key) return S.cook.allRows;
+  if (S.cook.allPending) return S.cook.allPending;
+  S.cook.allPending = (async () => {
+    const rows = await call('all_recipes');
+    S.cook.allRows = Array.isArray(rows) ? rows : [];
+    S.cook.allFor = key;
+    return S.cook.allRows;
+  })().finally(() => { S.cook.allPending = null; });
+  return S.cook.allPending;
 }
 function staminaRecoveryHTML(it) {
   if (it.effect !== 'StaminaRecover') return '';
@@ -3373,7 +3375,9 @@ function extraStaminaHTML(it) {
     `<div class="h-text">Adds ${wheels.toFixed(1)} extra stamina wheels</div>`;
 }
 function renderCooking() {
-  if (S.cook.all && !S.cook.allRows) ensureAllRecipes().then(() => renderCooking());
+  if (S.cook.all && (!S.cook.allRows || S.cook.allFor !== cookVersionKey())) {
+    ensureAllRecipes().then(() => { if (S.cook.all) renderCooking(); });
+  }
   const rows = cookBaseRows();
   const effects = cookEffects();
   if (S.cook.fx && !effects.some((e) => e.key === S.cook.fx)) S.cook.fx = '';
@@ -3486,7 +3490,14 @@ function pollSelect() {
 }
 function liveSettingsText() {
   const sv = dyn().save || {};
-  if (sv.live === 'on') return 'Live memory is on. Position and facing update while you play; hearts, inventory, and completion refresh when the game saves.';
+  if (sv.live === 'on') {
+    if (sv.live_pouch === 'on') return 'Live memory is on. Position and cooking ingredients update while you play; other tabs follow the last save.';
+    if (sv.live_pouch === 'scanning') return 'Live memory is on. Looking for the game\'s live pouch so material counts and cooking can update.';
+    if (sv.live_pouch === 'failed') return `Live material counts are unavailable${sv.live_pouch_error ? `: ${sv.live_pouch_error}` : '.'} Cooking shows the last save.`;
+    if (sv.live_data === 'on') return 'Live position is on. Material counts and cooking follow the last save.';
+    const why = sv.live_data_error ? `: ${sv.live_data_error}` : '.';
+    return `Live position is on, but live save data is unavailable${why}`;
+  }
   if (sv.live_error) return `${sv.live_error}. Save polling still works. Launch TotK from here to enable live memory next time.`;
   return 'Launch TotK from the companion to read the in-memory save. If you start the game another way, the companion stays in save-file mode.';
 }
@@ -3506,7 +3517,8 @@ function renderSettings() {
   const st = S.settings;
   const sv = dyn().save || {};
   const live = sv.live === 'on';
-  const liveNote = !live && sv.live_error ? liveSettingsText() : '';
+  const liveData = sv.live_data === 'on';
+  const liveNote = (live && !liveData) || (!live && sv.live_error) ? liveSettingsText() : '';
   const rb = sv.rebuild;
   const rbActive = !!(rb && (rb.running || rb.error || rb.done)) || !!S.rebuildStarted;
   const rebuildLabel = rb && rb.running ? 'Rebuilding...' : 'Rebuild now';
@@ -3567,14 +3579,26 @@ function renderStatusLine() {
     el.innerHTML = `<span class="warn">The game is writing the save. Trying again.</span>`;
   } else if (sv.live === 'on') {
     const slot = sv.slot ? sv.slot.replace('_', ' ') : 'save';
-    el.innerHTML = `${esc(slot)}, <b>live memory</b> · ${ago(sv.mtime)}`;
+    let warn = '';
+    if (sv.live_pouch === 'scanning') warn = ' · <span class="warn">scanning pouch</span>';
+    else if (sv.live_pouch === 'failed') warn = ' · <span class="warn">pouch unavailable</span>';
+    else if (sv.live_data !== 'on') warn = ' · <span class="warn">save data unavailable</span>';
+    el.innerHTML = `${esc(slot)}, <b>live memory</b>${warn} · ${ago(sv.mtime)}`;
   } else {
     const next = sv.next_scan ? Math.max(0, Math.ceil(sv.next_scan - Date.now() / 1000)) : null;
     const slot = sv.slot ? sv.slot.replace('_', ' ') : 'save';
     el.innerHTML = `${esc(slot)}, saved ${ago(sv.mtime)}${next !== null ? ` · next check in ${next}s` : ''}`;
   }
   hint.textContent = sv.live === 'on'
-    ? 'Read-only live memory · updates while the game runs'
+    ? (sv.live_pouch === 'on'
+        ? 'Read-only live memory · position and cooking ingredients update while you play'
+        : sv.live_pouch === 'scanning'
+          ? 'Read-only live memory · scanning for the game\'s live pouch'
+          : sv.live_pouch === 'failed'
+            ? (sv.live_pouch_error || 'Material counts show the last save')
+            : sv.live_data === 'on'
+              ? 'Read-only live memory · material counts follow the last save'
+              : (sv.live_data_error || 'Live position only; save polling continues'))
     : 'Read-only save mode · refreshes when the game saves';
   updateFollowButton();
 }

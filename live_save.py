@@ -270,7 +270,15 @@ class LiveSave:
             raise NotRunning('the game is not running')
         if self.buffer_start is None:
             self._prepare()
-        data = read_mem(self.pid, self.buffer_start, self.size)
+        try:
+            data = read_mem(self.pid, self.buffer_start, self.size)
+        except OSError:
+            # The game unmaps the save buffer while a menu is open, during a
+            # load, and while it saves. Drop the address and look for the new
+            # buffer; _prepare raises NotReady until the game publishes one.
+            self.buffer_start = None
+            self._prepare()
+            data = read_mem(self.pid, self.buffer_start, self.size)
         if (len(data) != self.size or
                 data[self.table_size:self.table_size + 4] != struct.pack('<I', SENTINEL) or
                 data[HEADER_SIZE:HEADER_SIZE + 32] != self.signature):
