@@ -11,16 +11,24 @@ names that are known materials, and counts that are -1 exactly where a name is
 empty. The save file supplies the array length and breaks a tie if more than
 one int array fits. read() then takes a few milliseconds.
 
+The scan has hard limits on chunk size, scanned bytes, candidates and elapsed
+time so a large or unusual process cannot grow the companion without bound.
+
 This module is read-only. It never writes to the game.
 """
 import os
 import struct
+import time
 
 import live_save
 
 NAME_STRIDE = 0x50
-CHUNK = 64 << 20
+CHUNK = 8 << 20
 MAX_ADDR = 1 << 47
+MAX_DESCS = 50000
+MAX_FITS = 64
+MAX_SCAN_BYTES = 16 << 30
+MAX_SCAN_SECONDS = 45.0
 
 
 class Gone(Exception):
@@ -99,23 +107,50 @@ class Pouch:
         """
         key = struct.pack('<Q', n)
         descs = []
+        scanned = 0
+        started = time.monotonic()
+        truncated = False
         for base, size in self.regions():
             off = 0
             while off < size:
                 if stop and stop():
                     raise Gone('stopped')
+                if time.monotonic() - started > MAX_SCAN_SECONDS:
+                    truncated = True
+                    break
+                if scanned >= MAX_SCAN_BYTES:
+                    truncated = True
+                    break
                 data = self._read(base + off, min(CHUNK, size - off) + 0x28)
+                scanned += len(data)
                 i = data.find(key)
+                hits = 0
                 while i >= 0:
+                    if len(descs) >= MAX_DESCS:
+                        truncated = True
+                        break
                     if i % 8 == 0 and data[i + 16:i + 24] == key and len(data) >= i + 0x20:
                         pa = struct.unpack_from('<Q', data, i + 8)[0]
                         pb = struct.unpack_from('<Q', data, i + 24)[0]
-                        if 0x10000 < pa < MAX_ADDR and 0x10000 < pb < MAX_ADDR and pa != pb:
+                        if (0x10000 < pa < MAX_ADDR and 0x10000 < pb < MAX_ADDR
+                                and pa != pb and pa % 8 == 0 and pb % 8 == 0):
                             descs.append(pa)
+                    hits += 1
+                    if hits % 10000 == 0 and time.monotonic() - started > MAX_SCAN_SECONDS:
+                        truncated = True
+                        break
                     i = data.find(key, i + 1)
                 off += CHUNK
+                if truncated:
+                    break
+            if truncated:
+                break
+        if not descs:
+            raise Gone('no descriptor candidates in memory')
         names = None
-        for pa in descs:
+        for idx, pa in enumerate(descs):
+            if idx % 100 == 0 and time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise Gone('material list scan timed out')
             got = self._names(pa, n)
             if got and any(got):
                 used = [x for x in got if x]
@@ -125,13 +160,17 @@ class Pouch:
         if names is None:
             raise Gone('no material list in memory')
         fits = []
-        for pa in descs:
+        for idx, pa in enumerate(descs):
+            if idx % 100 == 0 and time.monotonic() - started > MAX_SCAN_SECONDS:
+                raise Gone('count array scan timed out')
             raw = self._read(pa, n * 4)
             if len(raw) < n * 4:
                 continue
             vals = struct.unpack('<%di' % n, raw)
             if all((v >= 0) == bool(nm) and v < 100000 for v, nm in zip(vals, names)):
                 fits.append((pa, vals))
+                if len(fits) >= MAX_FITS:
+                    break
         if not fits:
             raise Gone('no count array in memory')
         if len(fits) > 1 and hint:
