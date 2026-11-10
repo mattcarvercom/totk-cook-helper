@@ -15,7 +15,7 @@ const S = {
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
-         reveal: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
+         reveal: false, labels: true, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -383,6 +383,10 @@ function catMeta(key) {
   return { key: key, label: key, color: '#dcc890', kind: 'dot' };
 }
 function mapOnly(key) { return !!catMeta(key).map_only; }
+function mapTracked(key) {
+  const meta = catMeta(key);
+  return !meta.map_only || !!meta.tracked;
+}
 function ainfo(actor) { return (cat().actors || {})[actor] || {}; }
 function invCat(key) {
   const list = (dyn().inventory || []);
@@ -450,6 +454,29 @@ const MAP_LABEL_PRIORITY = {
   towers: 5, temples: 6, shrines: 7, lightroots: 8, locations: 9, shops: 10,
   dispensers: 11, dragon_tears: 12, wells: 13, caves: 14, chasms: 15,
 };
+const MAP_LABEL_STYLES = {
+  region: {
+    minZoom: 0, fade: 1, rank: 0, size: 21, pad: 9,
+    font: '500 21px "Alegreya Sans SC", Georgia, serif',
+    fill: 'rgba(245,238,218,.86)', stroke: 'rgba(3,7,6,.88)', lineWidth: 3.6,
+  },
+  zone: {
+    minZoom: 0.13, fade: 0.10, rank: 1, size: 15, pad: 7,
+    font: '500 15px "Alegreya Sans SC", Georgia, serif',
+    fill: 'rgba(220,200,144,.9)', stroke: 'rgba(3,7,6,.9)', lineWidth: 3,
+  },
+  area: {
+    minZoom: 0.30, fade: 0.12, rank: 2, size: 12.5, pad: 6,
+    font: '500 12.5px "Alegreya Sans", "Segoe UI", sans-serif',
+    fill: 'rgba(239,233,218,.8)', stroke: 'rgba(3,7,6,.88)', lineWidth: 2.7,
+  },
+  detail: {
+    minZoom: 0.62, fade: 0.18, rank: 3, size: 11, pad: 5,
+    font: '400 11px "Alegreya Sans", "Segoe UI", sans-serif',
+    fill: 'rgba(168,162,144,.9)', stroke: 'rgba(3,7,6,.86)', lineWidth: 2.4,
+  },
+};
+const MAP_LABEL_TIER_ORDER = ['region', 'zone', 'area', 'detail'];
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -473,6 +500,7 @@ function restoreUiState(raw) {
   if (MAP_LAYERS.includes(map.layer)) { S.map.layer = map.layer; S.map.layerSet = true; }
   if (MAP_FOUND.includes(map.found)) S.map.found = map.found;
   if (typeof map.reveal === 'boolean') S.map.reveal = map.reveal;
+  if (typeof map.labels === 'boolean') S.map.labels = map.labels;
   if (typeof map.medals === 'boolean') S.map.medals = map.medals;
   if (typeof map.path === 'boolean') S.map.path = map.path;
   if (typeof map.search === 'string') S.map.search = map.search;
@@ -513,7 +541,7 @@ function uiState() {
     inv: { cat: S.inv.cat, filter: S.inv.filter },
     armor: { slot: S.armor.slot, owned: S.armor.owned, set: S.armor.set, filter: S.armor.filter },
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
-           reveal: S.map.reveal, medals: S.map.medals, path: S.map.path,
+           reveal: S.map.reveal, labels: S.map.labels, medals: S.map.medals, path: S.map.path,
            search: S.map.search, cats: [...S.map.cats], cat_version: 3 },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
@@ -1673,7 +1701,7 @@ function mapVisible() {
     if (!S.map.cats.has(it.cat)) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only) {
+    if (mapTracked(it.cat)) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1692,7 +1720,7 @@ function searchResults() {
     if (it.map_hidden) continue;
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
-    if (!only) {
+    if (mapTracked(it.cat)) {
       if (S.map.found === 'missing' && st !== 0) continue;
       if (S.map.found === 'found' && st === 0) continue;
     }
@@ -1761,17 +1789,19 @@ function mapLayerCounts(layer) {
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
     if (it.layer !== layer || it.map_hidden) continue;
-    const only = mapOnly(it.cat);
+    const tracked = mapTracked(it.cat);
     const st = states[i] || 0;
-    if (!out[it.cat]) out[it.cat] = { all: 0, total: 0, complete: 0, matching: 0 };
-    out[it.cat].all++;
-    if (!only) {
-      if (S.map.found === 'missing' && st !== 0) continue;
-      if (S.map.found === 'found' && st === 0) continue;
-    }
-    out[it.cat].total++;
-    out[it.cat].matching++;
-    if (st >= 2) out[it.cat].complete++;
+    if (!out[it.cat]) out[it.cat] = { all: 0, found: 0, missing: 0, matching: 0, tracked };
+    const n = out[it.cat];
+    n.all++;
+    if (!tracked) continue;
+    if (st >= 1) n.found++; else n.missing++;
+  }
+  for (const n of Object.values(out)) {
+    if (!n.tracked) n.matching = n.all;
+    else if (S.map.found === 'all') n.matching = n.all;
+    else if (S.map.found === 'found') n.matching = n.found;
+    else n.matching = n.missing;
   }
   return out;
 }
@@ -1848,8 +1878,13 @@ function renderMapToolbar() {
   $('#map-layers').innerHTML = layers.map(([k, l, ic]) =>
     `<button data-layer="${k}" aria-pressed="${S.map.layer === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
   const found = [['all', 'All', 'select-all'], ['missing', 'Missing', 'radio-button-unchecked'], ['found', 'Found', 'check-circle']];
+  const foundTitle = {
+    all: 'Show all markers',
+    missing: 'Show only missing tracked markers; layers without completion data show totals',
+    found: 'Show only found tracked markers; layers without completion data show totals',
+  };
   $('#map-found').innerHTML = found.map(([k, l, ic]) =>
-    `<button data-found="${k}" aria-pressed="${S.map.found === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
+    `<button data-found="${k}" aria-pressed="${S.map.found === k}" title="${esc(foundTitle[k])}" aria-label="${esc(foundTitle[k])}">${micon(ic, l)}</button>`).join('');
   const actions = $('.map-cat-actions');
   if (actions) {
     actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')}</button>` +
@@ -1866,6 +1901,8 @@ function renderMapToolbar() {
   $('#map-search').value = S.map.search;
   const reveal = $('#map-reveal');
   if (reveal) reveal.checked = !!S.map.reveal;
+  const labels = $('#map-labels');
+  if (labels) labels.checked = !!S.map.labels;
   const path = $('#map-path');
   if (path) path.checked = !!S.map.path;
   renderMapPathNote();
@@ -1918,7 +1955,7 @@ function renderMapCats() {
       `<span>Travel medallions</span><span class="n">${allMedals.length}</span></button>`
     : '';
   const ordered = (cat().collectible_categories || [])
-    .filter((c) => counts[c.key] && (c.map_only || counts[c.key].matching > 0))
+    .filter((c) => counts[c.key] && counts[c.key].matching > 0)
     .sort((a, b) => (MAP_CAT_RANK.has(a.key) ? MAP_CAT_RANK.get(a.key) : 999) -
                     (MAP_CAT_RANK.has(b.key) ? MAP_CAT_RANK.get(b.key) : 999) ||
                     a.label.localeCompare(b.label));
@@ -1928,8 +1965,8 @@ function renderMapCats() {
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
       : '';
-    const count = c.map_only ? n.all
-      : S.map.found === 'missing' ? n.matching : `${n.complete}/${n.all}`;
+    const count = !n.tracked ? `${n.all}`
+      : S.map.found === 'missing' ? `${n.missing}/${n.all}` : `${n.found}/${n.all}`;
     return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
       `${marker}<span>${esc(c.label)}</span><span class="n">${count}</span></button>`;
   }).join('');
@@ -2012,7 +2049,7 @@ function renderResultsNote(searching) {
   if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
   if (S.map.found === 'all') { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only</span>` +
+  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only for tracked markers</span>` +
     '<button data-maprelax="found">Show all types</button>';
 }
 
@@ -2272,8 +2309,10 @@ function drawMap() {
   pts.sort((a, b) => (b.x.state - a.x.state) || (a.x.item.id === S.map.sel ? 1 : 0) - (b.x.item.id === S.map.sel ? 1 : 0));
   S.map.hitPoints = pts;
   const base = clamp(3.2 + Math.log2(S.map.zoom + 1) * 1.7, 3, 10);
+  const markerLabels = placeMapLabels(ctx, pts, w, h);
+  drawRegionLabels(ctx, pts, w, h, pr, markerLabels);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
-  drawMapLabels(ctx, pts, w, h);
+  drawMapLabels(ctx, markerLabels);
   drawSources(ctx, w, h, pr);
   drawMedallions(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
@@ -2466,14 +2505,92 @@ function drawMarker(ctx, x, y, r, xitem, selected) {
   ctx.restore();
   if (selected) markerRing(ctx, x, y, r + 5);
 }
-function drawMapLabels(ctx, pts, w, h) {
+function drawRegionLabels(ctx, pts, w, h, pr, markerLabels) {
+  if (!S.map.labels) return;
+  const labels = cat().map_labels || [];
+  if (!labels.length) return;
+  const zoom = S.map.zoom;
+  const visible = [];
+  for (const label of labels) {
+    if (label.layer !== S.map.layer) continue;
+    const style = MAP_LABEL_STYLES[label.tier];
+    if (!style) continue;
+    const fade = style.minZoom <= 0 ? 1 : clamp((zoom - style.minZoom) / style.fade, 0, 1);
+    if (fade <= 0) continue;
+    visible.push({ label, style, fade });
+  }
+  if (!visible.length) return;
+  visible.sort((a, b) => (a.style.rank - b.style.rank) ||
+    a.label.name.length - b.label.name.length);
+  const markerSize = clamp(14 + Math.log2(zoom + 3) * 3.2, 17, 34);
+  const obstacles = pts.map((p) => ({
+    x: p.sx - markerSize / 2 - 3, y: p.sy - markerSize / 2 - 3,
+    w: markerSize + 6, h: markerSize + 6,
+  }));
+  obstacles.push({ x: w - 240, y: 6, w: 234, h: 60 });
+  obstacles.push({ x: w - 175, y: h - 155, w: 170, h: 150 });
+  for (const label of (markerLabels || [])) obstacles.push(label.box);
+  const placed = [];
+  const hits = (box, list) => list.some((r) =>
+    !(box.x + box.w < r.x || box.x > r.x + r.w ||
+      box.y + box.h < r.y || box.y > r.y + r.h));
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  let drawn = 0;
+  for (const v of visible) {
+    if (drawn >= 90) break;
+    const sx = S.map.tx + pr.x(v.label.x) * zoom;
+    const sy = S.map.ty + pr.y(v.label.z) * zoom;
+    if (sx < -120 || sx > w + 120 || sy < -70 || sy > h + 70) continue;
+    ctx.font = v.style.font;
+    const text = v.label.name;
+    const tw = ctx.measureText(text).width;
+    const pad = v.style.pad;
+    const step = v.style.size + 16;
+    const offsets = [0, -step, step, -step * 2, step * 2];
+    let chosen = null;
+    for (const dy of offsets) {
+      const box = {
+        x: sx - tw / 2 - pad, y: sy + dy - v.style.size / 2 - pad / 2,
+        w: tw + pad * 2, h: v.style.size + pad,
+      };
+      if (box.x < 3 || box.y < 3 || box.x + box.w > w - 3 || box.y + box.h > h - 3) continue;
+      if (hits(box, placed) || hits(box, obstacles)) continue;
+      chosen = { box, y: sy + dy };
+      break;
+    }
+    if (!chosen) {
+      if (v.style.rank > 1) continue;
+      const box = {
+        x: sx - tw / 2 - pad, y: sy - v.style.size / 2 - pad / 2,
+        w: tw + pad * 2, h: v.style.size + pad,
+      };
+      if (box.x < 3 || box.y < 3 || box.x + box.w > w - 3 || box.y + box.h > h - 3) continue;
+      chosen = { box, y: sy };
+    }
+    placed.push(chosen.box);
+    ctx.globalAlpha = v.fade;
+    ctx.lineWidth = v.style.lineWidth;
+    ctx.strokeStyle = v.style.stroke;
+    ctx.fillStyle = v.style.fill;
+    ctx.strokeText(text, sx, chosen.y);
+    ctx.fillText(text, sx, chosen.y);
+    drawn++;
+  }
+  ctx.restore();
+}
+
+function placeMapLabels(ctx, pts, w, h) {
   const size = clamp(14 + Math.log2(S.map.zoom + 3) * 3.2, 17, 34);
   const labels = pts.filter((p) => {
     const min = MAP_LABEL_MIN_ZOOM[p.x.item.cat];
     return min !== undefined && S.map.zoom >= min;
   }).sort((a, b) => (MAP_LABEL_PRIORITY[a.x.item.cat] ?? 99) - (MAP_LABEL_PRIORITY[b.x.item.cat] ?? 99));
-  if (!labels.length) return;
+  if (!labels.length) return [];
   const placed = [];
+  const out = [];
   ctx.save();
   ctx.font = '600 11.5px "Segoe UI", system-ui, sans-serif';
   ctx.textBaseline = 'middle';
@@ -2494,11 +2611,23 @@ function drawMapLabels(ctx, pts, w, h) {
     if (placed.some((r) => !(box.x + box.w < r.x || box.x > r.x + r.w ||
                              box.y + box.h < r.y || box.y > r.y + r.h))) continue;
     placed.push(box);
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = 'rgba(3,7,10,.92)';
-    ctx.strokeText(text, lx, ly);
-    ctx.fillStyle = 'rgba(255,244,212,.94)';
-    ctx.fillText(text, lx, ly);
+    out.push({ text, lx, ly, box });
+  }
+  ctx.restore();
+  return out;
+}
+function drawMapLabels(ctx, labels) {
+  if (!labels || !labels.length) return;
+  ctx.save();
+  ctx.font = '600 11.5px "Segoe UI", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = 'rgba(3,7,10,.92)';
+  ctx.fillStyle = 'rgba(255,244,212,.94)';
+  for (const label of labels) {
+    ctx.strokeText(label.text, label.lx, label.ly);
+    ctx.fillText(label.text, label.lx, label.ly);
   }
   ctx.restore();
 }
@@ -3125,6 +3254,11 @@ function attachStatic() {
     renderNearby();
     drawMap();
     requestMinimapDraw();
+  });
+  const labelMap = $('#map-labels');
+  if (labelMap) labelMap.addEventListener('change', (e) => {
+    S.map.labels = !!e.target.checked;
+    drawMap();
   });
   const pathMap = $('#map-path');
   if (pathMap) pathMap.addEventListener('change', async (e) => {

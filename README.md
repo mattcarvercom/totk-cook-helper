@@ -130,8 +130,8 @@ seconds (default 15).
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. Layer buttons, marker filters,
-search and the reveal checkbox are in the left pane; zoom buttons float on the
-map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
+search, the reveal checkbox, and the place-label toggle are in the left pane;
+zoom buttons float on the map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges, temples and landmarks are separate map layers, each with
 its game marker art, including the shrine gate, lightroot bulb, player arrow,
 and a per-temple icon for the five main dungeons. Temples sit directly below
@@ -139,13 +139,22 @@ Skyview Towers in the layer list.
 Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list runs from
 fast travel and major places down to collectibles instead of sorting by marker
-count. Found/Missing applies to every marker layer; a category with no matching
-markers drops out of the layer list, and its count shows the matching total.
-**Link** centers without changing the zoom, and at fit zoom it only
+count. Found/Missing applies to every tracked marker layer, including shrines,
+towers, lightroots, and place layers with complete discovery data: villages,
+stables, Great Fairies, Dragon's Tears, and device dispensers. All and Found
+show found/total; Missing shows missing/total and draws only the missing
+markers. A tracked category with no matching markers drops out of the layer
+list. Places without full discovery data, such as temples, shops, tech labs,
+and challenges, show their total and stay visible in every view. **Link**
+centers without changing the zoom, and at fit zoom it only
 pings the marker because the whole map is already visible. The ping fades out
 smoothly instead of blinking off. Hovering a marker switches the cursor to a
 pointer and shows its name, layer, and state; place and fast travel names also
-appear as labels when you zoom in. **Reveal full map**
+appear as labels when you zoom in. Named regions, lakes, mountains, forests,
+ruins, and other locations from the game's LocationArea data appear as
+free-floating labels above the map tiles and below markers. Region labels show
+at fit zoom; zone, area, and detail labels fade in as you zoom. **Place labels**
+in the left pane toggles them. **Reveal full map**
 is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
 remain visible over unexplored areas. The Sky layer draws the Hyrule base,

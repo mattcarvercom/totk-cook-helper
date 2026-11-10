@@ -1,9 +1,9 @@
 """Build the TotK Companion's local data from the port's romfs.
 
 Everything here comes from the user's own copy of the game: item and armor
-metadata, icons, compendium pictures, and the surface/sky map tiles. The only
-pre-computed input is data/collectibles.json (coordinates and completion
-hashes), which is documented in data/NOTICE.md.
+metadata, icons, compendium pictures, the surface/sky map tiles, and the named
+LocationArea labels. The only pre-computed input is data/collectibles.json
+(coordinates and completion hashes), which is documented in data/NOTICE.md.
 
 Run:
 
@@ -15,6 +15,7 @@ import argparse
 import base64
 import collections
 import json
+import math
 import os
 import re
 import shutil
@@ -229,6 +230,35 @@ MAP_ICON_COLORS = {
     'shrines': '#4fb8f0', 'hidden_koroks': '#e6c15a', 'carry_koroks': '#f0d77a',
     'lightroots': '#b98cff', 'sages_wills': '#f1e28a',
 }
+
+# Named LocationArea points become free-floating map labels. The game stores
+# TargetZoomLevel on some rows (Nearest, Near, Far, Farthest); the rest fall
+# back to the category below. Region labels are the eight named regions from
+# District; smaller spots fade in as the map zooms.
+MAP_LABEL_TIERS = {
+    'District': 'region',
+    'SkyArchipelago': 'zone',
+    'SpotBig': 'zone',
+    'SpotBigArtifact': 'zone',
+    'SpotBigMagma': 'zone',
+    'SpotBigMountain': 'zone',
+    'SpotBigOther': 'zone',
+    'SpotBigTimber': 'zone',
+    'SpotBigWater': 'zone',
+    'SpotBigWithNameIcon': 'zone',
+    'SpotMiddleArtifact': 'area',
+    'SpotMiddleMountain': 'area',
+    'SpotMiddleOther': 'area',
+    'SpotMiddleTimber': 'area',
+    'SpotMiddleWater': 'area',
+    'SpotSmallArtifact': 'detail',
+    'SpotSmallMagma': 'area',
+    'SpotSmallMountain': 'area',
+    'SpotSmallOther': 'detail',
+    'SpotSmallTimber': 'area',
+    'SpotSmallWater': 'area',
+}
+MAP_LABEL_SKIP = ('ZonauRelief', 'ArmorOfLambda', 'ShieldSurfing', 'HyruleCastle_')
 
 # Material sources keep a bounded number of points per material so the
 # catalog stays small enough to load in the webview at startup.
@@ -826,6 +856,7 @@ class Builder:
 
     def build_collectibles(self):
         src = json.load(open(os.path.join(DATA, 'collectibles.json'), encoding='utf-8'))
+        location_rows = src.get('locations', [])
         places_path = os.path.join(DATA, 'map_places.json')
         if os.path.isfile(places_path):
             places = json.load(open(places_path, encoding='utf-8'))
@@ -897,8 +928,112 @@ class Builder:
                 if row.get('path'):
                     item['path'] = row['path']
                 items.append(item)
+        # Split place layers reuse the discovery flag of their original
+        # LocationArea row. A place with no matching location stays untracked
+        # and is treated as available by the UI.
+        place_hashes = collections.defaultdict(list)
+        for row in location_rows:
+            if 'completion_hash' not in row:
+                continue
+            pos = row.get('position') or row
+            name = (row.get('display_name') or
+                    self.location_text.get(str(row.get('id') or '')) or
+                    row.get('internal_name'))
+            if not name:
+                continue
+            try:
+                lx = float(pos.get('x', 0) or 0)
+                lz = float(pos.get('z', 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            place_hashes[name].append(
+                (lx, lz, int(row['completion_hash']) & 0xffffffff))
+        for item in items:
+            if item['cat'] not in MAP_ONLY_KEYS or 'hash' in item:
+                continue
+            best = None
+            best_d = 1e30
+            for lx, lz, h in place_hashes.get(item['name'], []):
+                d = math.hypot(item['x'] - lx, item['z'] - lz)
+                if d < best_d:
+                    best_d, best = d, h
+            if best is not None and best_d <= 300:
+                item['hash'] = best
+            elif item['name'] == 'Mini Stable':
+                for lx, lz, h in place_hashes.get('Lookout Landing', []):
+                    if math.hypot(item['x'] - lx, item['z'] - lz) <= 150:
+                        item['hash'] = h
+                        break
+        for cat in categories:
+            if cat['key'] in MAP_ONLY_KEYS:
+                cat_items = [x for x in items if x['cat'] == cat['key']]
+                cat['tracked'] = bool(cat_items) and all('hash' in x for x in cat_items)
         self.catalog['collectible_categories'] = categories
         self.catalog['collectibles'] = items
+
+    # --- map labels -----------------------------------------------------------
+
+    def build_map_labels(self):
+        """Export named LocationArea points for region and zone labels.
+
+        The pause map keeps these names in LocationArea and resolves them
+        through Location.msbt. TargetZoomLevel supplies the game's own zoom
+        tier where it exists. Map place markers keep their own labels, so
+        names already used by a place layer are skipped here.
+        """
+        place_names = {x['name'] for x in self.catalog.get('collectibles', [])
+                       if x['cat'] in MAP_ONLY_KEYS and x.get('name')}
+        labels = []
+        seen = set()
+        for field in ('MainField', 'MinusField'):
+            path = self.rf.find('Banc/%s/LocationArea/%s.' % (field, field),
+                                '.locationarea.byml.zs')
+            if not path:
+                continue
+            data = byml.Byml(self.rf.read(path)).root
+            for kind, rows in data.items():
+                base = MAP_LABEL_TIERS.get(kind)
+                if not base:
+                    continue
+                for row in rows:
+                    msg = row['LocationName'].replace('Work/Location/', '').split('.')[0]
+                    if msg.startswith(MAP_LABEL_SKIP):
+                        continue
+                    name = self.location_text.get(msg)
+                    if not name or name == msg or name in place_names:
+                        continue
+                    tier = base
+                    if msg.startswith('MapArea_'):
+                        tier = 'zone'
+                    elif kind != 'District':
+                        levels = ','.join(v for v in row.get('TargetZoomLevel', []) if v)
+                        if 'Farthest' in levels or 'Far' in levels:
+                            tier = 'zone'
+                        elif 'Near' in levels:
+                            tier = 'area'
+                        elif 'Nearest' in levels:
+                            tier = 'detail'
+                    if kind == 'District':
+                        tier = 'region'
+                    for trans in row.get('Trans', []):
+                        x, y, z = trans
+                        layer = ('depths' if field == 'MinusField'
+                                 else 'sky' if y > 900 else 'surface')
+                        key = (name, layer)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        labels.append({
+                            'name': name,
+                            'x': round(x, 1),
+                            'y': round(y, 1),
+                            'z': round(z, 1),
+                            'layer': layer,
+                            'tier': tier,
+                        })
+        labels.sort(key=lambda x: (x['layer'], x['tier'], x['name'].lower()))
+        self.catalog['map_labels'] = labels
+        log('map labels: %d' % len(labels))
 
     # --- map reveal regions ---------------------------------------------------
 
@@ -1595,6 +1730,7 @@ class Builder:
         self.catalog['fuse_names'] = self.attachment_names
         self.extract_sage_icons()
         self.build_collectibles()
+        self.build_map_labels()
         self.build_material_sources()
         if not self.skip_map:
             self.build_map()
@@ -1615,6 +1751,7 @@ class Builder:
                 'armor': len(self.catalog.get('armor', [])),
                 'compendium': len(self.catalog.get('compendium', [])),
                 'collectibles': len(self.catalog.get('collectibles', [])),
+                'map_labels': len(self.catalog.get('map_labels', [])),
                 'material_sources': len(self.catalog.get('material_sources', {})),
                 'icons': len([v for v in self.built_icons.values() if v]),
                 'map_icons': len(self.catalog.get('map_icons', {})),

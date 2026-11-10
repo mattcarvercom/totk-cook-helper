@@ -23,9 +23,9 @@ or game files are included.
 - [Zelda Dungeon](https://www.zeldadungeon.net/) and
   [Zelda Wiki](https://zeldawiki.wiki/) for the five main temple coordinates.
 
-The companion rebuilds all icons, names, and map tiles from the user's own
-game files at install time. The collectible list and the region polygons are the
-only pre-computed data files, and they are used read-only.
+The companion rebuilds all icons, names, map tiles, and map labels from the
+user's own game files at install time. The collectible list and the region
+polygons are the only pre-computed data files, and they are used read-only.
 
 `ui/material/` contains a small subset of
 [Material Symbols](https://fonts.google.com/icons) by Google, licensed under the
