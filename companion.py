@@ -34,6 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS = os.path.join(HERE, 'companion_settings.json')
 DATA = os.path.join(HERE, 'ui', 'companion_data')
 TITLE = 'TotK Companion'
+APP_ID = 'totk-companion'
+ICON_SVG = os.path.join(HERE, 'ui', 'totk-companion.svg')
+ICON_PNG = os.path.join(HERE, 'ui', 'totk-companion.png')
 LIVE_MARKER = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir(),
                            'totk-companion.live')
 POLL_S = 15.0
@@ -327,6 +330,90 @@ class Api:
         self._app.close()
 
 
+def _desktop_arg(value):
+    """Quote one Exec argument using Desktop Entry rules."""
+    if not re.search(r'[\s"\'\\><~|&;$*?#()`]', value):
+        return value
+    return '"' + re.sub(r'([\\"`$])', r'\\\1', value) + '"'
+
+
+def write_if_changed(path, data):
+    try:
+        with open(path, 'rb') as fh:
+            if fh.read() == data:
+                return False
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as fh:
+        fh.write(data)
+    return True
+
+
+def install_desktop_entry(game):
+    """Install the per-user launcher and icons used to identify the window.
+
+    Desktop environments look up a window's name and icon through its app id
+    or WM_CLASS. Without a matching entry GNOME falls back to the process name
+    (companion.py) and a generic icon.
+    """
+    data_home = os.environ.get('XDG_DATA_HOME') or os.path.expanduser('~/.local/share')
+    entry = (
+        '[Desktop Entry]\n'
+        'Type=Application\n'
+        'Name=%s\n'
+        'GenericName=Tears of the Kingdom companion\n'
+        'Comment=Status, inventory, map, compendium, and cooking from your own save\n'
+        'Exec=%s --game %s\n'
+        'Path=%s\n'
+        'Icon=%s\n'
+        'Terminal=false\n'
+        'Categories=Game;Utility;\n'
+        'StartupNotify=true\n'
+        'StartupWMClass=%s\n'
+        % (TITLE, _desktop_arg(os.path.join(HERE, 'totk-companion.sh')),
+           _desktop_arg(game), _desktop_arg(HERE), APP_ID, APP_ID)
+    )
+    entry_path = os.path.join(data_home, 'applications', APP_ID + '.desktop')
+    changed = write_if_changed(entry_path, entry.encode())
+    try:
+        os.chmod(entry_path, 0o755)
+    except OSError:
+        pass
+    icons = os.path.join(data_home, 'icons', 'hicolor')
+    for src, sub in ((ICON_SVG, 'scalable/apps'), (ICON_PNG, '256x256/apps')):
+        if not os.path.isfile(src):
+            continue
+        with open(src, 'rb') as fh:
+            data = fh.read()
+        dest = os.path.join(icons, sub, APP_ID + os.path.splitext(src)[1])
+        changed = write_if_changed(dest, data) or changed
+    if changed:
+        try:
+            subprocess.run(['gtk-update-icon-cache', '-q', '-t', icons],
+                           check=False, timeout=10,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
+def set_gtk_identity():
+    """Use one stable app id for the Wayland app id and the X11 WM_CLASS."""
+    try:
+        import gi
+        gi.require_version('Gtk', '3.0')
+        gi.require_version('Gdk', '3.0')
+        from gi.repository import GLib, Gdk
+    except (ImportError, ValueError):
+        return
+    GLib.set_prgname(APP_ID)
+    GLib.set_application_name(TITLE)
+    try:
+        Gdk.set_program_class(APP_ID)
+    except Exception:
+        pass
+
+
 class App:
     def __init__(self, game, poll_s=POLL_S, launch_game=False):
         self.game = os.path.abspath(game)
@@ -383,13 +470,17 @@ class App:
     # --- window ---------------------------------------------------------------
 
     def run(self):
+        install_desktop_entry(self.game)
+        set_gtk_identity()
         import webview
+        icon = ICON_PNG if os.path.isfile(ICON_PNG) else ICON_SVG
         self.window = webview.create_window(
             TITLE, url=os.path.join(HERE, 'ui', 'companion.html'), js_api=Api(self),
             width=1220, height=780, min_size=(860, 560), background_color='#0a0d0c',
             text_select=False, on_top=self.s['on_top'])
         self.window.events.closing += self.on_closing
-        webview.start(self.boot, gui='gtk', private_mode=True)
+        webview.start(self.boot, gui='gtk', private_mode=True,
+                      icon=icon if os.path.isfile(icon) else None)
 
     def boot(self):
         self.window.events.loaded.wait(15)

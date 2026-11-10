@@ -141,6 +141,10 @@ seconds (default 15). `--launch-game` starts TotK as the companion's child so
 live position and facing work. The `launch-totk` wrapper does this
 automatically when it starts the companion.
 
+The first launch installs `totk-companion.desktop` and its icons under
+`~/.local/share`, so the window, taskbar entry and app grid show **TotK
+Companion** with its own icon instead of the `companion.py` process name.
+
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
 rather than the pause map's last viewed layer. The left pane holds the marker
