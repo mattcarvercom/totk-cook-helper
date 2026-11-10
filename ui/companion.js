@@ -1858,14 +1858,19 @@ function isLive() { return !!(dyn().save && dyn().save.live === 'on'); }
 function updateFollowButton() {
   const btn = $('#map-follow');
   if (!btn) return;
-  const live = isLive();
-  if (!live && S.map.follow) S.map.follow = false;
+  const sv = dyn().save || {};
+  const live = sv.live === 'on';
+  // Loading screens, menus, and chasm transitions briefly drop the actor
+  // graph. Keep Follow armed through those gaps; it resumes with live memory.
+  if (!live && sv.live_error) S.map.follow = false;
   btn.disabled = !live;
   btn.setAttribute('aria-pressed', String(!!S.map.follow && live));
   btn.textContent = S.map.follow && live ? 'Following' : 'Follow';
   btn.title = live
     ? (S.map.follow ? 'Stop following Link' : 'Follow Link (keeps Link centered)')
-    : 'Follow Link needs live memory. Launch TotK from the companion.';
+    : (S.map.follow
+        ? 'Following will resume when live memory returns'
+        : 'Follow Link needs live memory. Launch TotK from the companion.');
 }
 function stopFollowing() {
   if (!S.map.follow) return;

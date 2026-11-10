@@ -165,8 +165,10 @@ centers without changing the zoom, and at fit zoom it only
 pings the marker because the whole map is already visible. **Follow** keeps
 Link centered while the game updates his live position; changing the zoom
 keeps him centered, and panning, **Fit**, a manual layer change, or a marker
-jump stops following. Follow is only available with live memory and the button
-says so when the companion is in save-file mode. The map stays on the layer
+jump stops following. Follow stays armed through loading screens, menus, and
+chasm transitions and resumes when live memory returns. Follow is only
+available with live memory and the button says so when the companion is in
+save-file mode. The map stays on the layer
 you choose; turn on Follow if you want it to switch with Link when he fast
 travels between the Surface, Sky, and Depths. The ping fades out
 smoothly instead of blinking off. Hovering a marker switches the cursor to a
