@@ -16,7 +16,7 @@ const S = {
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
          reveal: false, labels: true, poiLabels: true, follow: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
-         searchAll: false, labelSel: null, groupCollapsed: {},
+         searchAll: false, labelSel: null, groupCollapsed: {}, optionsOpen: false,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -442,7 +442,6 @@ const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'temples', 'village
 const MAP_GROUPS = [
   { key: 'travel', label: 'Travel gates',
     cats: ['medals', 'shrines', 'towers', 'temples', 'lightroots', 'labs'] },
-  { key: 'quests', label: 'Quests', cats: ['dragon_tears'] },
   { key: 'collectibles', label: 'Collectibles',
     cats: ['hidden_koroks', 'carry_koroks', 'bubbuls', 'old_maps', 'sages_wills',
            'schema_stones', 'yiga_schematics', 'large_zonaite', 'treasure_chests'] },
@@ -452,7 +451,7 @@ const MAP_GROUPS = [
     cats: ['stables', 'great_fairies', 'shops', 'dispensers', 'bargainers',
            'cooking_pots', 'goddess_statues'] },
   { key: 'other', label: 'Other',
-    cats: ['challenges', 'cherry_trees', 'addison_signposts'] },
+    cats: ['challenges', 'cherry_trees', 'addison_signposts', 'dragon_tears'] },
   { key: 'bosses', label: 'Bosses',
     cats: ['hinoxes', 'taluses', 'moldugas', 'flux_constructs', 'froxes', 'gleeoks',
            'lynels', 'gloom_spawns', 'dungeon_bosses'] },
@@ -596,6 +595,7 @@ function resetFilters() {
   S.map.path = false;
   S.map.searchAll = false;
   S.map.labelSel = null;
+  S.map.optionsOpen = false;
   const searchAll = $('#map-search-all');
   if (searchAll) searchAll.checked = false;
   S.map.sel = null;
@@ -633,6 +633,7 @@ function resetUi() {
   S.map.pathData = null;
   S.map.pathFor = -1;
   S.map.searchAll = false;
+  S.map.optionsOpen = false;
   S.map.pending = null;
   S.settings.tab = 'status';
   const cb = $('#map-search-all');
@@ -2053,8 +2054,13 @@ function renderMap() {
 }
 function renderMapToolbar() {
   const layers = [['depths', 'Depths', 'dark-mode'], ['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud']];
-  $('#map-layers').innerHTML = layers.map(([k, l, ic]) =>
-    `<button data-layer="${k}" aria-pressed="${S.map.layer === k}" title="${l}" aria-label="${l}">${micon(ic, l)}</button>`).join('');
+  $('#map-layers').innerHTML = layers.map(([k, l, ic]) => {
+    const iconFile = (cat().map_icons || {})['layer_' + k];
+    const body = iconFile
+      ? `<img class="layico" src="companion_data/${encodeURI(iconFile)}" alt="">`
+      : micon(ic, l);
+    return `<button data-layer="${k}" aria-pressed="${S.map.layer === k}" title="${l}" aria-label="${l}">${body}</button>`;
+  }).join('');
   const found = [['all', 'All', 'select-all'], ['missing', 'Missing', 'radio-button-unchecked'], ['found', 'Found', 'check-circle']];
   const foundTitle = {
     all: 'Show all markers',
@@ -2065,8 +2071,8 @@ function renderMapToolbar() {
     `<button data-found="${k}" aria-pressed="${S.map.found === k}" title="${esc(foundTitle[k])}" aria-label="${esc(foundTitle[k])}">${micon(ic, l)}</button>`).join('');
   const actions = $('.map-cat-actions');
   if (actions) {
-    actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')}</button>` +
-      `<button data-mcats="none" title="Hide all marker types" aria-label="Hide all marker types">${micon('visibility-off')}</button>`;
+    actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')} Show all</button>` +
+      `<button data-mcats="none" title="Hide all marker types" aria-label="Hide all marker types">${micon('visibility-off')} Hide all</button>`;
   }
   const zoomIn = $('#map-zoomin');
   if (zoomIn) zoomIn.innerHTML = micon('add');
@@ -2090,6 +2096,12 @@ function renderMapToolbar() {
   renderMapPathNote();
   updateFollowButton();
   updateSearchClear();
+  const optionsBtn = $('#map-options-btn');
+  const optionsPanel = $('#map-options-panel');
+  if (optionsBtn && optionsPanel) {
+    optionsBtn.setAttribute('aria-expanded', String(!!S.map.optionsOpen));
+    optionsPanel.hidden = !S.map.optionsOpen;
+  }
 }
 
 function renderMapPathNote() {
@@ -3615,6 +3627,23 @@ function attachStatic() {
   });
   const searchAll = $('#map-search-all');
   if (searchAll) searchAll.addEventListener('change', (e) => setSearchAll(e.target.checked));
+  const optionsBtn = $('#map-options-btn');
+  if (optionsBtn) optionsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    S.map.optionsOpen = !S.map.optionsOpen;
+    optionsBtn.setAttribute('aria-expanded', String(S.map.optionsOpen));
+    const panel = $('#map-options-panel');
+    if (panel) panel.hidden = !S.map.optionsOpen;
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!S.map.optionsOpen) return;
+    if (e.target.closest && e.target.closest('#map-options')) return;
+    S.map.optionsOpen = false;
+    if (optionsBtn) optionsBtn.setAttribute('aria-expanded', 'false');
+    const panel = $('#map-options-panel');
+    if (panel) panel.hidden = true;
+  });
   const clearSearch = $('#map-search-clear');
   if (clearSearch) clearSearch.addEventListener('click', (e) => {
     e.preventDefault();

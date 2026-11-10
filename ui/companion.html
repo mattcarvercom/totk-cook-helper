@@ -87,23 +87,11 @@
       <div class="map-layout">
         <aside class="map-left">
           <h3 class="label">Layers and markers</h3>
-          <div class="seg map-layers" id="map-layers"></div>
           <div class="seg map-found" id="map-found"></div>
-          <label class="filter map-search">
-            <span class="msi sm" data-micon="search" aria-hidden="true"></span>
-            <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place, marker, or label">
-            <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
-          </label>
-          <label class="map-reveal map-search-scope" title="Include every map layer, marker, and place label in search results. Off keeps search on the current map and selected markers to avoid spoilers."><input type="checkbox" id="map-search-all"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Search all maps</span></label>
           <div class="map-cat-actions">
             <button data-mcats="all">Show all</button>
             <button data-mcats="none">Hide all</button>
           </div>
-          <label class="map-reveal" title="Fill in the whole current map layer instead of only the areas you have visited."><input type="checkbox" id="map-reveal"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Reveal full map</span></label>
-          <label class="map-reveal" title="Draw the route recorded in this save's footprint data, with distance, point count, and deaths."><input type="checkbox" id="map-path"> <span class="msi sm" data-micon="route" aria-hidden="true"></span> <span>Hero's Path</span></label>
-          <label class="map-reveal" title="Show region, zone, lake, mountain, and landmark names. More names fade in as you zoom."><input type="checkbox" id="map-labels"> <span class="msi sm" data-micon="landscape" aria-hidden="true"></span> <span>Place labels</span></label>
-          <label class="map-reveal" title="Show names next to markers such as shrines, towers, stables, and wells."><input type="checkbox" id="map-poi-labels"> <span class="msi sm" data-micon="format-list-bulleted" aria-hidden="true"></span> <span>POI labels</span></label>
-          <div class="map-path-note" id="map-path-note" hidden></div>
           <div class="map-cats" id="map-cats"></div>
         </aside>
         <div class="pane-resizer map-resizer" data-pane="map-left"><button class="pane-grip" data-pane-toggle="map-left" aria-label="Collapse map layers" title="Collapse map layers">‹</button></div>
@@ -114,6 +102,19 @@
             <div class="player-ping" id="player-ping" hidden><span></span><span></span><span></span></div>
             <div class="map-tooltip" id="map-tooltip" hidden></div>
             <div class="map-loading" id="map-loading">Loading map…</div>
+            <div class="map-layer-float" id="map-layers"></div>
+            <div class="map-options" id="map-options">
+              <button class="map-options-btn" id="map-options-btn" type="button" aria-expanded="false" title="Map options">
+                <span class="msi sm" data-micon="map" aria-hidden="true"></span><span>Options</span>
+              </button>
+              <div class="map-options-panel" id="map-options-panel" hidden>
+                <label class="map-reveal" title="Fill in the whole current map layer instead of only the areas you have visited."><input type="checkbox" id="map-reveal"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Reveal full map</span></label>
+                <label class="map-reveal" title="Draw the route recorded in this save's footprint data, with distance, point count, and deaths."><input type="checkbox" id="map-path"> <span class="msi sm" data-micon="route" aria-hidden="true"></span> <span>Hero's Path</span></label>
+                <label class="map-reveal" title="Show region, zone, lake, mountain, and landmark names. More names fade in as you zoom."><input type="checkbox" id="map-labels"> <span class="msi sm" data-micon="landscape" aria-hidden="true"></span> <span>Place labels</span></label>
+                <label class="map-reveal" title="Show names next to markers such as shrines, towers, stables, and wells."><input type="checkbox" id="map-poi-labels"> <span class="msi sm" data-micon="format-list-bulleted" aria-hidden="true"></span> <span>POI labels</span></label>
+                <div class="map-path-note" id="map-path-note" hidden></div>
+              </div>
+            </div>
             <div class="map-zoom">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>
               <button class="btn" id="map-zoomout" title="Zoom out">−</button>
@@ -130,6 +131,12 @@
         </div>
         <div class="pane-resizer map-resizer" data-pane="map-side"><button class="pane-grip" data-pane-toggle="map-side" aria-label="Collapse map details" title="Collapse map details">›</button></div>
         <aside class="map-side">
+          <label class="filter map-search">
+            <span class="msi sm" data-micon="search" aria-hidden="true"></span>
+            <input id="map-search" type="text" spellcheck="false" autocomplete="off" placeholder="Find a place, marker, or label">
+            <button class="map-search-clear" id="map-search-clear" type="button" title="Clear search" hidden>×</button>
+          </label>
+          <label class="map-reveal map-search-scope" title="Include every map layer, marker, and place label in search results. Off keeps search on the current map and selected markers to avoid spoilers."><input type="checkbox" id="map-search-all"> <span class="msi sm" data-micon="map" aria-hidden="true"></span> <span>Search all maps</span></label>
           <div id="map-detail" class="map-detail"></div>
           <h3 class="label" id="map-near-title">Near Link</h3>
           <div class="map-results-note" id="map-results-note" hidden></div>

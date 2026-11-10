@@ -1933,6 +1933,13 @@ class Builder:
         if player is not None:
             out['player'] = save_icon('player', tint_icon(player, '#5cff7f'))
 
+        for key, source in (('depths', 'MapTabIcon_Cave'),
+                            ('surface', 'MapTabIcon_Ground'),
+                            ('sky', 'MapTabIcon_Sky')):
+            img = decode(source)
+            if img is not None:
+                out['layer_' + key] = save_icon('layer_' + key, key_black(img))
+
         for key, source in TEMPLE_ICON_SOURCES.items():
             img = decode(source)
             if img is not None:

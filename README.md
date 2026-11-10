@@ -143,9 +143,13 @@ automatically when it starts the companion.
 
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height
-rather than the pause map's last viewed layer. Layer buttons, marker filters,
-search, the reveal checkbox, and the place-label toggle are in the left pane;
-zoom buttons float on the map. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
+rather than the pause map's last viewed layer. The left pane holds the marker
+filter and the grouped layer list. Search and the Search all maps scope are at
+the top of the right pane. Depths, Surface, and Sky float vertically on the
+map's upper left with the game's own map-tab icons; zoom buttons float on the
+upper right. Reveal full map, Hero's Path, Place labels, and POI labels live in
+the floating **Options** panel on the map. Show all and Hide all sit directly
+above the first layer group. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges, temples and landmarks are separate map layers, each with
 its game marker art, including the shrine gate, lightroot bulb, player arrow,
 and a per-temple icon for the six dungeons, including Hyrule Castle. Temples
@@ -158,8 +162,8 @@ but not the randomized contents. Malanya Spring is the fifth Great Fairy and
 Forge Constructs complete the shop layer in the Depths and sky.
 Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list is grouped under Travel gates,
-Quests, Collectibles, Locations, Services, Other, and Bosses. Each heading
-collapses and remembers its state. The list is a two-column grid when the pane
+Collectibles, Locations, Services, Other, and Bosses. Dragon's Tears sits in
+Other. Each heading collapses and remembers its state. The list is a two-column grid when the pane
 is wide enough and collapses to one scrolling column when it is narrow. It runs
 from fast travel and major places down to collectibles instead of sorting by
 marker count. Search is limited to the selected layers and markers by default;
