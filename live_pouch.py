@@ -16,6 +16,7 @@ time so a large or unusual process cannot grow the companion without bound.
 
 This module is read-only. It never writes to the game.
 """
+import ctypes
 import os
 import struct
 import time
@@ -29,6 +30,15 @@ MAX_DESCS = 50000
 MAX_FITS = 64
 MAX_SCAN_BYTES = 16 << 30
 MAX_SCAN_SECONDS = 45.0
+
+_SCAN_BUF = None
+
+
+def _scan_buffer(size):
+    global _SCAN_BUF
+    if _SCAN_BUF is None or len(_SCAN_BUF) != size:
+        _SCAN_BUF = ctypes.create_string_buffer(size)
+    return _SCAN_BUF
 
 
 class Gone(Exception):
@@ -58,6 +68,9 @@ class Pouch:
             raise
         except OSError:
             return b''
+
+    def _read_into(self, address, buffer, size):
+        return live_save.read_mem_into(self.pid, address, buffer, size)
 
     def regions(self):
         """Writable private or anonymous regions, as the game's heap."""
@@ -110,6 +123,8 @@ class Pouch:
         scanned = 0
         started = time.monotonic()
         truncated = False
+        scan_buf = _scan_buffer(CHUNK + 0x28)
+        view = memoryview(scan_buf)
         for base, size in self.regions():
             off = 0
             while off < size:
@@ -121,25 +136,35 @@ class Pouch:
                 if scanned >= MAX_SCAN_BYTES:
                     truncated = True
                     break
-                data = self._read(base + off, min(CHUNK, size - off) + 0x28)
-                scanned += len(data)
-                i = data.find(key)
+                want = min(CHUNK, size - off) + 0x28
+                try:
+                    got = self._read_into(base + off, scan_buf, want)
+                except live_save.Unavailable:
+                    raise
+                except OSError:
+                    got = 0
+                if got <= 0:
+                    off += CHUNK
+                    continue
+                scanned += got
+                i = live_save.memmem(scan_buf, got, key)
                 hits = 0
-                while i >= 0:
+                while i is not None:
                     if len(descs) >= MAX_DESCS:
                         truncated = True
                         break
-                    if i % 8 == 0 and data[i + 16:i + 24] == key and len(data) >= i + 0x20:
-                        pa = struct.unpack_from('<Q', data, i + 8)[0]
-                        pb = struct.unpack_from('<Q', data, i + 24)[0]
-                        if (0x10000 < pa < MAX_ADDR and 0x10000 < pb < MAX_ADDR
-                                and pa != pb and pa % 8 == 0 and pb % 8 == 0):
-                            descs.append(pa)
+                    if i % 8 == 0 and got >= i + 0x20:
+                        if struct.unpack_from('<Q', view, i + 16)[0] == n:
+                            pa = struct.unpack_from('<Q', view, i + 8)[0]
+                            pb = struct.unpack_from('<Q', view, i + 24)[0]
+                            if (0x10000 < pa < MAX_ADDR and 0x10000 < pb < MAX_ADDR
+                                    and pa != pb and pa % 8 == 0 and pb % 8 == 0):
+                                descs.append(pa)
                     hits += 1
                     if hits % 10000 == 0 and time.monotonic() - started > MAX_SCAN_SECONDS:
                         truncated = True
                         break
-                    i = data.find(key, i + 1)
+                    i = live_save.memmem(scan_buf, got, key, i + 1)
                 off += CHUNK
                 if truncated:
                     break

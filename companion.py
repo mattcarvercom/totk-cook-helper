@@ -49,6 +49,7 @@ LIVE_POUCH_POLL_S = 0.5
 LIVE_POUCH_RETRY_S = 30.0
 MIN_POLL_S = 0.5
 SPINNER_MIN_S = 0.35
+MEMORY_LIMIT_KB = 12 << 20
 
 DEFAULTS = {
     'on_top': True,
@@ -519,6 +520,7 @@ class App:
             except Exception:
                 pass
         threading.Thread(target=self.loop, daemon=True).start()
+        threading.Thread(target=self.memory_guard, daemon=True).start()
         if self.launch_game:
             self.start_live()
 
@@ -652,6 +654,7 @@ class App:
         delay = LIVE_SAVE_POLL_S
         last_error = None
         was_ok = False
+        notready = 0
         while not self.closing:
             if self.live_pid:
                 try:
@@ -672,12 +675,15 @@ class App:
                     was_ok = False
                     delay = 10.0
                 except live_save.NotReady:
-                    # The game has not published its save buffer yet. Retry
-                    # quickly so a freshly loaded save appears promptly.
+                    # The game has not published its save buffer yet. The
+                    # first few retries are quick so a freshly loaded save
+                    # appears promptly, then back off to avoid repeatedly
+                    # scanning the whole game.
                     self.live_data_ok = False
                     self.live_save_error = 'the live save buffer is not published yet'
                     was_ok = False
-                    delay = 3.0
+                    notready += 1
+                    delay = 3.0 if notready <= 5 else 15.0
                 except Exception as e:
                     # A torn read while the game rewrites the buffer must not
                     # stop live data for the rest of the session.
@@ -696,6 +702,7 @@ class App:
                     self.live_save_error = None
                     last_error = None
                     was_ok = True
+                    notready = 0
                     delay = LIVE_SAVE_POLL_S
             else:
                 self.live_data_ok = False
@@ -1090,6 +1097,34 @@ class App:
         return True
 
     # --- save polling ---------------------------------------------------------
+
+    def memory_guard(self):
+        """Exit before a runaway allocation can trigger the system OOM killer."""
+        while not self.closing:
+            rss = 0
+            try:
+                with open('/proc/self/status', encoding='ascii') as f:
+                    for line in f:
+                        if line.startswith('VmRSS:'):
+                            rss = int(line.split()[1])
+                            break
+            except (OSError, ValueError, IndexError):
+                rss = 0
+            if rss > MEMORY_LIMIT_KB:
+                time.sleep(1.0)
+                try:
+                    with open('/proc/self/status', encoding='ascii') as f:
+                        for line in f:
+                            if line.startswith('VmRSS:'):
+                                rss = int(line.split()[1])
+                                break
+                except (OSError, ValueError, IndexError):
+                    rss = 0
+                if rss > MEMORY_LIMIT_KB:
+                    print('memory guard: RSS %d MiB, exiting to protect the system'
+                          % (rss // 1024), file=sys.stderr, flush=True)
+                    os._exit(70)
+            time.sleep(1.0)
 
     def loop(self):
         while not self.closing:

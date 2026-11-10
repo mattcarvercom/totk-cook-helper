@@ -18,12 +18,15 @@ import glob
 import math
 import os
 import struct
+import time
 
 SENTINEL = 0xa3db7114
 POINTER_SIZE = 8
 HEADER_SIZE = 0x28
 SCAN_CHUNK = 64 << 20
 MIN_REGION = 1 << 20
+MAX_SCAN_BYTES = 16 << 30
+MAX_SCAN_SECONDS = 45.0
 
 
 class NotRunning(Exception):
@@ -46,14 +49,33 @@ _libc = ctypes.CDLL('libc.so.6', use_errno=True)
 _libc.process_vm_readv.argtypes = [ctypes.c_int, ctypes.POINTER(_IOVec), ctypes.c_ulong,
                                    ctypes.POINTER(_IOVec), ctypes.c_ulong, ctypes.c_ulong]
 _libc.process_vm_readv.restype = ctypes.c_ssize_t
+_libc.memmem.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
+_libc.memmem.restype = ctypes.c_void_p
+
+_SCAN_BUF = None
 
 
-def read_mem(pid, address, size):
-    """Read up to size bytes from another process. Read-only."""
+def _scan_buffer(size):
+    global _SCAN_BUF
+    if _SCAN_BUF is None or len(_SCAN_BUF) != size:
+        _SCAN_BUF = ctypes.create_string_buffer(size)
+    return _SCAN_BUF
+
+
+def memmem(buffer, size, needle, start=0):
+    """Return the offset of needle in buffer, or None. No Python copy."""
+    if start >= size or size - start < len(needle):
+        return None
+    base = ctypes.addressof(buffer)
+    found = _libc.memmem(base + start, size - start, ctypes.c_char_p(needle), len(needle))
+    return None if not found else found - base
+
+
+def read_mem_into(pid, address, buffer, size):
+    """Read up to size bytes into an existing ctypes buffer. Read-only."""
     if size <= 0:
-        return b''
-    buf = ctypes.create_string_buffer(size)
-    local = _IOVec(ctypes.cast(buf, ctypes.c_void_p), size)
+        return 0
+    local = _IOVec(ctypes.cast(buffer, ctypes.c_void_p), size)
     remote = _IOVec(ctypes.c_void_p(address), size)
     got = _libc.process_vm_readv(pid, ctypes.byref(local), 1,
                                  ctypes.byref(remote), 1, 0)
@@ -62,7 +84,16 @@ def read_mem(pid, address, size):
         if err in (1, 13):  # EPERM, EACCES
             raise Unavailable('ptrace permission denied')
         raise OSError(err, os.strerror(err))
-    return buf.raw[:got]
+    return got
+
+
+def read_mem(pid, address, size):
+    """Read up to size bytes from another process. Read-only."""
+    if size <= 0:
+        return b''
+    buf = ctypes.create_string_buffer(size)
+    got = read_mem_into(pid, address, buf, size)
+    return buf[:got]
 
 
 def _u64(pid, address):
@@ -229,20 +260,30 @@ class LiveSave:
         signature = disk[HEADER_SIZE:HEADER_SIZE + 32]
         size = len(disk)
         needle = struct.pack('<I', SENTINEL)
+        scan_buf = _scan_buffer(SCAN_CHUNK + 0x28)
+        scanned = 0
+        started = time.monotonic()
         for start, end in self._regions():
             offset = start
             while offset < end:
+                if time.monotonic() - started > MAX_SCAN_SECONDS:
+                    raise NotReady('the live save buffer scan timed out')
+                if scanned >= MAX_SCAN_BYTES:
+                    raise NotReady('the live save buffer scan reached its limit')
                 amount = min(SCAN_CHUNK, end - offset)
                 try:
-                    chunk = read_mem(self.pid, offset, amount)
+                    got = read_mem_into(self.pid, offset, scan_buf, amount + 0x28)
                 except Unavailable:
                     raise
                 except OSError:
                     break
+                if got <= 0:
+                    break
+                scanned += got
                 pos = 0
                 while True:
-                    hit = chunk.find(needle, pos)
-                    if hit < 0:
+                    hit = memmem(scan_buf, got, needle, pos)
+                    if hit is None:
                         break
                     candidate = offset + hit - table_end
                     if candidate >= start:
