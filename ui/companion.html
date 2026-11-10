@@ -102,8 +102,8 @@
             <div class="player-ping" id="player-ping" hidden><span></span><span></span><span></span></div>
             <div class="map-tooltip" id="map-tooltip" hidden></div>
             <div class="map-loading" id="map-loading">Loading map…</div>
-            <div class="map-layer-float" id="map-layers"></div>
-            <div class="map-options" id="map-options">
+            <div class="map-layer-float map-float-controls" id="map-layers"></div>
+            <div class="map-options map-float-controls" id="map-options">
               <button class="map-options-btn" id="map-options-btn" type="button" aria-expanded="false" title="Map options">
                 <span class="msi sm" data-micon="map" aria-hidden="true"></span><span>Options</span>
               </button>
@@ -115,12 +115,14 @@
                 <div class="map-path-note" id="map-path-note" hidden></div>
               </div>
             </div>
-            <div class="map-zoom">
+            <div class="map-link-controls map-float-controls">
+              <button class="btn" id="map-me" title="Center on Link">Link</button>
+              <button class="btn" id="map-follow" title="Follow Link needs live memory. Launch TotK from the companion." aria-pressed="false" disabled>Follow</button>
+            </div>
+            <div class="map-zoom-float map-float-controls">
               <button class="btn" id="map-zoomin" title="Zoom in">+</button>
               <button class="btn" id="map-zoomout" title="Zoom out">−</button>
               <button class="btn" id="map-fit" title="Fit map">Fit</button>
-              <button class="btn" id="map-me" title="Center on Link">Link</button>
-              <button class="btn" id="map-follow" title="Follow Link needs live memory. Launch TotK from the companion." aria-pressed="false" disabled>Follow</button>
             </div>
             <div class="minimap" id="minimap" title="Overview. Click or drag to move the map.">
               <img id="minimap-img" alt="" draggable="false">

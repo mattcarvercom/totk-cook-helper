@@ -2071,8 +2071,8 @@ function renderMapToolbar() {
     `<button data-found="${k}" aria-pressed="${S.map.found === k}" title="${esc(foundTitle[k])}" aria-label="${esc(foundTitle[k])}">${micon(ic, l)}</button>`).join('');
   const actions = $('.map-cat-actions');
   if (actions) {
-    actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')} Show all</button>` +
-      `<button data-mcats="none" title="Hide all marker types" aria-label="Hide all marker types">${micon('visibility-off')} Hide all</button>`;
+    actions.innerHTML = `<button data-mcats="all" title="Show all marker types" aria-label="Show all marker types">${micon('visibility')}</button>` +
+      `<button data-mcats="none" title="Hide all marker types" aria-label="Hide all marker types">${micon('visibility-off')}</button>`;
   }
   const zoomIn = $('#map-zoomin');
   if (zoomIn) zoomIn.innerHTML = micon('add');
@@ -3119,7 +3119,7 @@ function updateMapHover(clientX, clientY, target) {
   const tip = $('#map-tooltip');
   if (!vp || !tip) return;
   if (target && target !== vp && target.closest &&
-      target.closest('.map-zoom, .minimap, button, input, select, label')) {
+      target.closest('.map-float-controls, .minimap, button, input, select, label')) {
     hideMapTooltip();
     return;
   }
@@ -3697,7 +3697,7 @@ function attachStatic() {
 
   const vp = $('#map-viewport');
   const ignoreMapDrag = (target) => target && target !== vp && target.closest &&
-    !!target.closest('.map-zoom, .minimap, button, input, select, label');
+    !!target.closest('.map-float-controls, .minimap, button, input, select, label');
   vp.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || ignoreMapDrag(e.target)) return;
     hideMapTooltip();

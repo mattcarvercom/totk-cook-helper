@@ -147,10 +147,11 @@ rather than the pause map's last viewed layer. The left pane holds the marker
 filter and the grouped layer list. Search and the Search all maps scope are at
 the top of the right pane. Sky, Surface, and Depths float vertically at the
 middle of the map's left edge, using the game's map-tab icons tinted to the
-gold UI palette. **Options** sits in the top-left corner; zoom buttons float on
-the upper right. Reveal full map, Hero's Path, Place labels, and POI labels
-live in the floating Options panel. Show all and Hide all sit directly above
-the first layer group. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
+gold UI palette. **Options** sits in the top-left corner, **Link** and
+**Follow** sit in the top-right corner, and the zoom controls float vertically
+at the middle of the right edge. Reveal full map, Hero's Path, Place labels,
+and POI labels live in the floating Options panel. Show all and Hide all sit
+directly above the first layer group as icon buttons with tooltips. Villages, stables, Great Fairies, tech labs, shops, Dragon's Tears, device
 dispensers, challenges, temples and landmarks are separate map layers, each with
 its game marker art, including the shrine gate, lightroot bulb, player arrow,
 and a per-temple icon for the six dungeons, including Hyrule Castle. Temples
