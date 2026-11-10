@@ -127,13 +127,20 @@ def player_state(pid, anchor=None, max_distance=None):
             continue
         if abs(x) < 1 and abs(y) < 1 and abs(z) < 1:
             continue
+        if abs(x) < 1 and abs(y + 3975) < 1 and abs(z) < 1:
+            # Placeholder actor used while the world is not loaded yet.
+            continue
         norm = qw * qw + qx * qx + qy * qy + qz * qz
         if not (0.5 < norm < 1.5):
             continue
         heading = math.atan2(-2.0 * (qw * qy + qx * qz),
                              1.0 - 2.0 * (qy * qy + qz * qz))
         if anchor is not None:
-            d = math.hypot(x - anchor[0], z - anchor[1])
+            if len(anchor) >= 3:
+                d = math.sqrt((x - anchor[0]) ** 2 + (y - anchor[1]) ** 2 +
+                              (z - anchor[2]) ** 2)
+            else:
+                d = math.hypot(x - anchor[0], z - anchor[1])
             if max_distance is not None and d > max_distance:
                 continue
         else:

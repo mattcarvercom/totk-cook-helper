@@ -460,12 +460,13 @@ class App:
             try:
                 anchor = None
                 if self.live_state:
-                    anchor = (self.live_state['x'], self.live_state['z'])
+                    anchor = (self.live_state['x'], self.live_state['y'],
+                              self.live_state['z'])
                 else:
                     saved = (self.payload or {}).get('status') or {}
                     saved_pos = saved.get('position')
                     if saved_pos:
-                        anchor = (saved_pos['x'], saved_pos['z'])
+                        anchor = (saved_pos['x'], saved_pos['y'], saved_pos['z'])
                 state = live_save.player_state(self.live_pid, anchor=anchor,
                                                max_distance=700)
             except live_save.Unavailable as e:
@@ -479,12 +480,22 @@ class App:
                 print('live: stopped: %s' % e, file=sys.stderr, flush=True)
                 return
             if state:
+                if not self.live_active:
+                    layer = ('UnderGround' if state['y'] < -100
+                             else 'Sky' if state['y'] > 1000 else 'Ground')
+                    print('live: player at (%.0f, %.0f, %.0f), %s' %
+                          (state['x'], state['y'], state['z'], layer),
+                          file=sys.stderr, flush=True)
                 self.live_state = state
                 self.live_at = time.time()
                 self.live_active = True
                 self.live_error = None
                 self.push_live(state)
             else:
+                # The actor graph is unavailable (title screen, loading, or a
+                # save loaded far away). Drop the stale anchor so the next read
+                # starts from the save position again.
+                self.live_state = None
                 self.live_active = False
             time.sleep(LIVE_POLL_S)
 
