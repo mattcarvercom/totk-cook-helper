@@ -157,13 +157,17 @@ placements. The chest layer is generic: it names the chest type and position
 but not the randomized contents. Malanya Spring is the fifth Great Fairy and
 Forge Constructs complete the shop layer in the Depths and sky.
 Marker images are trimmed to their visible bounds so small icons such as wells
-use the same size on the map. The layer list is a two-column grid when the pane
+use the same size on the map. The layer list is grouped under Travel gates,
+Quests, Collectibles, Locations, Services, Other, and Bosses. Each heading
+collapses and remembers its state. The list is a two-column grid when the pane
 is wide enough and collapses to one scrolling column when it is narrow. It runs
 from fast travel and major places down to collectibles instead of sorting by
 marker count. Search is limited to the selected layers and markers by default;
-**Search all** expands it to every layer, marker, and place label. Results are
-stacked under headers for exact and fuzzy matches, split into POI labels,
-place labels, and other markers. Clicking a place label centers the map on it. Found/Missing applies to every tracked marker layer, including shrines,
+the **Search all maps** checkbox expands it to every layer, marker, and place
+label. Results are stacked under headers for exact and fuzzy matches, split
+into POI labels, place labels, and other markers. Clicking a result on another
+map switches to that map; clicking a place label centers the map on it.
+Found/Missing applies to every tracked marker layer, including shrines,
 towers, lightroots, and place layers with complete discovery data: villages,
 stables, Great Fairies, Dragon's Tears, and device dispensers. All and Found
 show found/total; Missing shows missing/total and draws only the missing
@@ -191,7 +195,9 @@ markers such as shrines, towers, stables, and wells. **Reveal full map**
 is off by default, so the map starts with the
 terrain you have revealed in the game. The fog only covers terrain; markers
 remain visible over unexplored areas. The Sky layer draws the Hyrule base,
-translucent clouds, then the sky islands on top so the islands stay clear.
+translucent clouds, then the sky islands on top. A denser cloud bed sits under
+and around the islands so they stand out, while the rest of the map keeps the
+translucent veil.
 Surface and Sky use the Skyview Tower region boundaries, and the Depths reveal
 the Field Map Area around each activated Lightroot, so the shapes are regions
 rather than circles. Travel
@@ -262,7 +268,9 @@ filters: Found map markers, photographed compendium entries, found progress
 entries, and the map terrain limited to revealed areas.
 
 Each tab remembers its filters and view choices across restarts. **Reset
-filters** in Settings restores the spoiler-free defaults. Settings also chooses
+filters** in Settings restores the spoiler-free defaults. **Reset UI** clears
+pane sizes and collapsed panes, expands every map group, resets filters and
+search scope, and returns to Status. Settings also chooses
 the save slot and refresh interval, and includes **Rebuild now** to rebuild
 icons, maps, and item data from the game files without running a script by hand.
 **Check save now** only re-reads the save when its file time changed.

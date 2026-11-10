@@ -409,6 +409,12 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .map-cat .mico.fallback { width: 10px; height: 10px; justify-self: center; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px rgba(0,0,0,.55); }
 .map-cat > span:not(.n):not(.mico) { min-width: 0; }
 .map-cat.medal-toggle { grid-column: 1 / -1; }
+.map-group { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; width: 100%; margin: 8px 0 2px; padding: 5px 4px 4px; border: 0; border-top: 1px solid var(--line-soft); border-radius: 0; background: transparent; color: var(--gold); font: 600 10.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; text-align: left; }
+.map-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.map-group:hover { color: var(--gold-hi); }
+.map-group .gchev { width: 12px; flex: none; color: var(--faint); font-size: 11px; line-height: 1; }
+.map-group .glabel { flex: 1; min-width: 0; }
+.map-group .gn { color: var(--faint); font: 500 10.5px var(--ui); letter-spacing: 0; }
 .map-cat:hover { background: rgba(214,196,140,.05); }
 .map-cat.legend { cursor: default; color: var(--gold); }
 .map-cat[aria-pressed="true"] { color: var(--text); border-color: var(--line-soft); background: rgba(214,196,140,.06); }

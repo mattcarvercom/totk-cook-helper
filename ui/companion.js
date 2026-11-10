@@ -16,7 +16,7 @@ const S = {
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
          reveal: false, labels: true, poiLabels: true, follow: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
-         searchAll: false, labelSel: null,
+         searchAll: false, labelSel: null, groupCollapsed: {},
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -439,16 +439,24 @@ const POUCH_NOUN = { weapons: 'weapon', bows: 'bow', shields: 'shield', armor: '
 const DEFAULT_MAP_CATS = ['shrines', 'lightroots', 'towers', 'temples', 'villages', 'stables',
                           'great_fairies', 'labs', 'challenges', 'wells', 'chasms',
                           'old_maps', 'sages_wills', 'schema_stones'];
-const MAP_CAT_ORDER = ['shrines', 'towers', 'temples', 'lightroots', 'stables', 'caves', 'villages',
-                       'wells', 'great_fairies', 'labs', 'shops', 'dispensers',
-                       'challenges', 'dragon_tears', 'chasms', 'cooking_pots',
-                       'goddess_statues', 'bargainers', 'cherry_trees', 'locations',
-                       'hidden_koroks', 'carry_koroks', 'bubbuls', 'large_zonaite',
-                       'treasure_chests', 'hinoxes', 'taluses', 'moldugas',
-                       'flux_constructs', 'froxes', 'gleeoks', 'lynels', 'gloom_spawns',
-                       'dungeon_bosses', 'old_maps', 'sages_wills', 'addison_signposts',
-                       'schema_stones', 'yiga_schematics'];
-const MAP_CAT_RANK = new Map(MAP_CAT_ORDER.map((key, i) => [key, i]));
+const MAP_GROUPS = [
+  { key: 'travel', label: 'Travel gates',
+    cats: ['medals', 'shrines', 'towers', 'temples', 'lightroots', 'labs'] },
+  { key: 'quests', label: 'Quests', cats: ['dragon_tears'] },
+  { key: 'collectibles', label: 'Collectibles',
+    cats: ['hidden_koroks', 'carry_koroks', 'bubbuls', 'old_maps', 'sages_wills',
+           'schema_stones', 'yiga_schematics', 'large_zonaite', 'treasure_chests'] },
+  { key: 'locations', label: 'Locations',
+    cats: ['villages', 'caves', 'wells', 'chasms', 'locations'] },
+  { key: 'services', label: 'Services',
+    cats: ['stables', 'great_fairies', 'shops', 'dispensers', 'bargainers',
+           'cooking_pots', 'goddess_statues'] },
+  { key: 'other', label: 'Other',
+    cats: ['challenges', 'cherry_trees', 'addison_signposts'] },
+  { key: 'bosses', label: 'Bosses',
+    cats: ['hinoxes', 'taluses', 'moldugas', 'flux_constructs', 'froxes', 'gleeoks',
+           'lynels', 'gloom_spawns', 'dungeon_bosses'] },
+];
 const MAP_LABEL_MIN_ZOOM = {
   villages: 0.18, stables: 0.18, great_fairies: 0.20, labs: 0.22,
   challenges: 0.22, locations: 0.22, shops: 0.25, towers: 0.30,
@@ -516,6 +524,13 @@ function restoreUiState(raw) {
     const valid = new Set((cat().collectible_categories || []).map((c) => c.key));
     S.map.cats = new Set(map.cats.filter((k) => valid.has(k)));
   }
+  if (map.groups && typeof map.groups === 'object') {
+    const valid = new Set(MAP_GROUPS.map((g) => g.key));
+    S.map.groupCollapsed = {};
+    for (const [key, value] of Object.entries(map.groups)) {
+      if (valid.has(key) && value) S.map.groupCollapsed[key] = true;
+    }
+  }
   const catVersion = Number(map.cat_version || 1);
   if (catVersion < 2) {
     for (const k of ['villages', 'stables', 'great_fairies', 'labs', 'challenges']) {
@@ -551,7 +566,8 @@ function uiState() {
     map: { layer: S.map.layerSet ? S.map.layer : null, found: S.map.found,
            reveal: S.map.reveal, labels: S.map.labels, poi_labels: S.map.poiLabels,
            medals: S.map.medals, path: S.map.path,
-           search: S.map.search, cats: [...S.map.cats], cat_version: 3 },
+           search: S.map.search, cats: [...S.map.cats],
+           groups: { ...S.map.groupCollapsed }, cat_version: 3 },
     progress: { cat: S.progress.cat, mode: S.progress.mode, filter: S.progress.filter },
     comp: { group: S.comp.group, state: S.comp.state, filter: S.comp.filter },
     cook: { filter: S.cook.filter, fx: S.cook.fx, sort: S.cook.sort, all: S.cook.all },
@@ -580,6 +596,8 @@ function resetFilters() {
   S.map.path = false;
   S.map.searchAll = false;
   S.map.labelSel = null;
+  const searchAll = $('#map-search-all');
+  if (searchAll) searchAll.checked = false;
   S.map.sel = null;
   S.map.sourceSel = null;
   S.map.sourceMat = null;
@@ -592,6 +610,37 @@ function resetFilters() {
   if (S.page === 'map') {
     renderMapToolbar(); renderMapCats(); renderMapDetail(); renderNearby(); drawMap();
   }
+}
+
+function resetUi() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('totk.pane.')) localStorage.removeItem(key);
+    }
+  } catch (e) { /* private mode */ }
+  resetFilters();
+  S.map.groupCollapsed = {};
+  S.map.layer = 'surface';
+  S.map.layerSet = false;
+  S.map.zoom = 1;
+  S.map.tx = 0;
+  S.map.ty = 0;
+  S.map.fitted = false;
+  S.map.sel = null;
+  S.map.sourceSel = null;
+  S.map.labelSel = null;
+  S.map.follow = false;
+  S.map.pathData = null;
+  S.map.pathFor = -1;
+  S.map.searchAll = false;
+  S.map.pending = null;
+  S.settings.tab = 'status';
+  const cb = $('#map-search-all');
+  if (cb) cb.checked = false;
+  Promise.all([
+    Promise.resolve(call('set_setting', 'tab', 'status')),
+    Promise.resolve(call('set_setting', 'ui_state', uiState())),
+  ]).then(() => window.location.reload());
 }
 
 async function start() {
@@ -2028,6 +2077,8 @@ function renderMapToolbar() {
   const me = $('#map-me');
   if (me) me.innerHTML = micon('my-location');
   $('#map-search').value = S.map.search;
+  const searchAll = $('#map-search-all');
+  if (searchAll) searchAll.checked = !!S.map.searchAll;
   const reveal = $('#map-reveal');
   if (reveal) reveal.checked = !!S.map.reveal;
   const labels = $('#map-labels');
@@ -2081,27 +2132,42 @@ function renderMapCats() {
   const el = $('#map-cats');
   const allMedals = dyn().travel_medallions || [];
   const medIcon = ainfo('Obj_WarpDLC_Prototype').icon;
-  const medRow = allMedals.length
-    ? `<button class="map-cat medal-toggle" data-mmedals="1" aria-pressed="${S.map.medals}">` +
+  const available = {};
+  if (allMedals.length) {
+    available.medals = `<button class="map-cat medal-toggle" data-mmedals="1" aria-pressed="${S.map.medals}">` +
       `${medIcon ? `<img class="mico" src="companion_data/icons/${encodeURIComponent(medIcon)}" alt="">` : ''}` +
-      `<span>Travel medallions</span><span class="n">${allMedals.length}</span></button>`
-    : '';
-  const ordered = (cat().collectible_categories || [])
-    .filter((c) => counts[c.key] && counts[c.key].matching > 0)
-    .sort((a, b) => (MAP_CAT_RANK.has(a.key) ? MAP_CAT_RANK.get(a.key) : 999) -
-                    (MAP_CAT_RANK.has(b.key) ? MAP_CAT_RANK.get(b.key) : 999) ||
-                    a.label.localeCompare(b.label));
-  el.innerHTML = medRow + ordered.map((c) => {
+      `<span>Travel medallions</span><span class="n">${allMedals.length}</span></button>`;
+  }
+  for (const c of (cat().collectible_categories || [])) {
     const n = counts[c.key];
+    if (!n || n.matching <= 0) continue;
     const iconFile = (cat().map_icons || {})[c.key];
     const marker = iconFile
       ? `<img class="mico" src="companion_data/${encodeURI(iconFile)}" alt="">`
       : `<span class="mico fallback" style="--c:${c.color}" aria-hidden="true"></span>`;
     const count = !n.tracked ? `${n.all}`
       : S.map.found === 'missing' ? `${n.missing}/${n.all}` : `${n.found}/${n.all}`;
-    return `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
+    available[c.key] = `<button class="map-cat" data-mcat="${c.key}" aria-pressed="${S.map.cats.has(c.key)}">` +
       `${marker}<span>${esc(c.label)}</span><span class="n">${count}</span></button>`;
-  }).join('');
+  }
+  const assigned = new Set();
+  for (const group of MAP_GROUPS) for (const key of group.cats) assigned.add(key);
+  const unassigned = Object.keys(available).filter((key) => !assigned.has(key));
+  let html = '';
+  for (const group of MAP_GROUPS) {
+    let rows = group.cats.filter((key) => available[key]);
+    if (group.key === 'other') rows = rows.concat(unassigned);
+    if (!rows.length) continue;
+    const collapsed = !!S.map.groupCollapsed[group.key];
+    const selected = rows.filter((key) =>
+      key === 'medals' ? S.map.medals : S.map.cats.has(key)).length;
+    html += `<button class="map-group" data-mgroup="${group.key}" aria-expanded="${!collapsed}">` +
+      `<span class="gchev" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>` +
+      `<span class="glabel">${esc(group.label)}</span>` +
+      `<span class="gn">${selected}/${rows.length}</span></button>`;
+    if (!collapsed) html += rows.map((key) => available[key]).join('');
+  }
+  el.innerHTML = html;
 }
 function renderMapDetail() {
   const el = $('#map-detail');
@@ -2190,6 +2256,13 @@ function renderSourceDetail() {
     (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
     `<div class="actions" style="margin-top:10px"><button class="btn" data-srcclear>Clear sources</button></div>`;
 }
+function setSearchAll(value) {
+  S.map.searchAll = !!value;
+  const cb = $('#map-search-all');
+  if (cb) cb.checked = S.map.searchAll;
+  renderNearby();
+}
+
 function renderResultsNote(searching) {
   const note = $('#map-results-note');
   if (!note) return;
@@ -3397,6 +3470,7 @@ function renderSettings() {
     `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild after a game update or to refresh icons, maps, and item data.</span></div>` +
     `<div class="row"><span class="t">Shortcuts</span><span class="s"><span class="kbd">/</span> filter · <span class="kbd">r</span> refresh · <span class="kbd">1</span>-<span class="kbd">7</span> sections · <span class="kbd">Esc</span> clear</span></div>` +
     `<div class="actions"><button class="btn" data-act="reset-filters">Reset filters</button>` +
+    `<button class="btn" data-act="reset-ui" title="Reset pane sizes, collapsed panes, map groups, filters, search scope, and the current tab.">Reset UI</button>` +
     `<button class="btn" data-act="refresh">Check save now</button><button class="btn" data-act="close-settings">Done</button></div></div>`;
   renderSaves();
   const poll = $('#poll-interval');
@@ -3539,6 +3613,8 @@ function attachStatic() {
     renderNearby();
     drawMap();
   });
+  const searchAll = $('#map-search-all');
+  if (searchAll) searchAll.addEventListener('change', (e) => setSearchAll(e.target.checked));
   const clearSearch = $('#map-search-clear');
   if (clearSearch) clearSearch.addEventListener('click', (e) => {
     e.preventDefault();
@@ -3773,6 +3849,13 @@ document.addEventListener('click', (e) => {
     S.map.medals = all;
     renderMapCats(); renderNearby(); drawMap(); return;
   }
+  if (t.dataset.mgroup) {
+    const key = t.dataset.mgroup;
+    S.map.groupCollapsed[key] = !S.map.groupCollapsed[key];
+    renderMapCats();
+    saveUiStateSoon();
+    return;
+  }
   if (t.dataset.mcat) {
     if (S.map.cats.has(t.dataset.mcat)) S.map.cats.delete(t.dataset.mcat); else S.map.cats.add(t.dataset.mcat);
     renderMapCats(); renderNearby(); drawMap(); return;
@@ -3798,8 +3881,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (t.dataset.mapsearchall !== undefined) {
-    S.map.searchAll = t.dataset.mapsearchall === '1';
-    renderNearby();
+    setSearchAll(t.dataset.mapsearchall === '1');
     return;
   }
   if (t.dataset.mlabel !== undefined) {
@@ -3835,6 +3917,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (t.dataset.act === 'reset-filters') { resetFilters(); openSettings(false); return; }
+  if (t.dataset.act === 'reset-ui') { resetUi(); return; }
   if (t.dataset.act === 'refresh') { call('refresh'); return; }
   if (t.dataset.act === 'launch-game') {
     t.disabled = true;
