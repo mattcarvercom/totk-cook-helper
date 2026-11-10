@@ -477,6 +477,7 @@ const MAP_LABEL_STYLES = {
   },
 };
 const MAP_LABEL_TIER_ORDER = ['region', 'zone', 'area', 'detail'];
+const PLAYER_COLOR = '#5cff7f';
 const INV_KEYS = ['', 'weapons', 'bows', 'shields', 'materials', 'food', 'zonai', 'keyitems', 'arrows'];
 const MAP_LAYERS = ['surface', 'sky', 'depths'];
 const MAP_FOUND = ['all', 'missing', 'found'];
@@ -2404,7 +2405,7 @@ function drawMinimap() {
     const pr = projection();
     const px = pr.x(pos.x) / m.width * w;
     const py = pr.y(pos.z) / m.height * h;
-    ctx.fillStyle = '#fff0c2';
+    ctx.fillStyle = PLAYER_COLOR;
     ctx.strokeStyle = 'rgba(5,8,10,.95)';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -2710,15 +2711,15 @@ function drawPlayer(ctx, x, y) {
   if (icon && icon.complete && icon.naturalWidth) {
     const size = clamp(16 + Math.log2(S.map.zoom + 3) * 2.6, 18, 34);
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,.9)';
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0,0,0,.95)';
+    ctx.shadowBlur = 6;
     ctx.drawImage(icon, x - size / 2, y - size / 2, size, size);
     ctx.restore();
     return;
   }
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = '#fff0c2';
+  ctx.fillStyle = PLAYER_COLOR;
   ctx.strokeStyle = 'rgba(5,8,10,.95)';
   ctx.lineWidth = 2;
   ctx.beginPath();

@@ -1674,7 +1674,7 @@ class Builder:
 
         player = decode('Nt_MapPlayerIconNew_00')
         if player is not None:
-            out['player'] = save_icon('player', tint_icon(player, '#fff0c2'))
+            out['player'] = save_icon('player', tint_icon(player, '#5cff7f'))
 
         for key, source in TEMPLE_ICON_SOURCES.items():
             img = decode(source)

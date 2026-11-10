@@ -351,7 +351,7 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .player-ping.fading { opacity: 0; }
 .player-ping::before {
   content: ''; position: absolute; inset: 0; border-radius: 50%;
-  border: 1.5px solid rgba(255, 240, 205, .55);
+  border: 1.5px solid rgba(92, 255, 127, .55);
   animation: player-ping 2.2s ease-out infinite;
 }
 @keyframes player-ping {
