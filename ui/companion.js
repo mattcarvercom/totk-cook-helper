@@ -2708,17 +2708,22 @@ function drawMedallions(ctx, w, h, pr) {
 
 function drawPlayer(ctx, x, y) {
   const icon = S.map.iconImages && S.map.iconImages['mapicons/player.webp'];
+  const heading = dyn().status && dyn().status.heading;
+  const angle = heading === null || heading === undefined ? 0 : Math.PI - heading;
   if (icon && icon.complete && icon.naturalWidth) {
     const size = clamp(16 + Math.log2(S.map.zoom + 3) * 2.6, 18, 34);
     ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
     ctx.shadowColor = 'rgba(0,0,0,.95)';
     ctx.shadowBlur = 6;
-    ctx.drawImage(icon, x - size / 2, y - size / 2, size, size);
+    ctx.drawImage(icon, -size / 2, -size / 2, size, size);
     ctx.restore();
     return;
   }
   ctx.save();
   ctx.translate(x, y);
+  ctx.rotate(angle);
   ctx.fillStyle = PLAYER_COLOR;
   ctx.strokeStyle = 'rgba(5,8,10,.95)';
   ctx.lineWidth = 2;

@@ -200,6 +200,7 @@ class Save:
         if life is None:
             life = max_life
         pos = self.vec3('PlayerStatus.SavePos')
+        heading = self.f32('PlayerStatus.SavePosRadY')
         sages = []
         for key, name in SAGES:
             base = 'PlayerStatus.Companion.%s.' % key
@@ -235,6 +236,7 @@ class Save:
             'energy': {'max': (self.f32('PlayerStatus.MaxEnergy') or 0) / 1000.0},
             'rupees': self.i32('PlayerStatus.CurrentRupee') or 0,
             'position': {'x': pos[0], 'y': pos[1], 'z': pos[2]} if pos else None,
+            'heading': heading,
             'layer': layer,
             'map_layer': raw_layer,
             'playtime': playtime,
