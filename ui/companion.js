@@ -675,32 +675,21 @@ async function poll(first) {
 
 function applyLiveStatus(live) {
   if (!live || !live.position) return;
-  const firstLive = S.map.liveLayer === undefined;
   if (S.d && S.d.status) {
     S.d.status.position = live.position;
     S.d.status.heading = live.heading;
     S.d.status.layer = live.layer;
   }
   const layer = playerLayer();
-  S.map.liveLayer = layer;
   const pos = document.querySelector('[data-live-pos]');
   if (pos) pos.textContent = fmtXYZ(live.position.x, live.position.y, live.position.z);
   if (S.page === 'map') {
     if (S.map.follow) {
       if (S.map.layer !== layer) setMapLayer(layer);
       followLink(false);
-    } else if (firstLive && S.map.layer !== layer) {
-      // Align the map with Link once when live mode starts. After that the
-      // map stays on the layer the user chose unless Follow is turned on.
-      setMapLayer(layer);
     }
     drawMap();
     requestMinimapDraw();
-  } else if (firstLive && S.map.layer !== layer) {
-    // Live mode began while another tab was open; point the map at Link once
-    // so opening it later does not show a layer saved from an earlier session.
-    S.map.layer = layer;
-    S.map.layerSet = true;
   }
 }
 
