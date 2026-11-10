@@ -15,7 +15,7 @@ const S = {
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
-         reveal: false, labels: true, poiLabels: true, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
+         reveal: false, labels: true, poiLabels: true, follow: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -656,14 +656,25 @@ async function poll(first) {
 
 function applyLiveStatus(live) {
   if (!live || !live.position) return;
+  const prevLayer = S.map.liveLayer;
   if (S.d && S.d.status) {
     S.d.status.position = live.position;
     S.d.status.heading = live.heading;
     S.d.status.layer = live.layer;
   }
+  const layer = playerLayer();
+  S.map.liveLayer = layer;
   const pos = document.querySelector('[data-live-pos]');
   if (pos) pos.textContent = fmtXYZ(live.position.x, live.position.y, live.position.z);
   if (S.page === 'map') {
+    if (S.map.follow) {
+      if (S.map.layer !== layer) setMapLayer(layer);
+      followLink(false);
+    } else if (prevLayer && prevLayer !== layer && S.map.layer === prevLayer) {
+      // Link fast traveled to another layer while the user was viewing his
+      // previous layer; follow him there instead of leaving a stale map up.
+      setMapLayer(layer);
+    }
     drawMap();
     requestMinimapDraw();
   }
@@ -1645,6 +1656,7 @@ function showMaterialSources(actor, mode) {
   S.map.layerSet = true;
   S.map.fitted = true;
   closeSources();
+  stopFollowing();
   showPage('map');
   requestAnimationFrame(() => {
     if (mode === 'near') centerOnPoint(points[0]);
@@ -1675,6 +1687,7 @@ function showSourceGroup(actor, kind, label) {
   S.map.layerSet = true;
   S.map.fitted = true;
   closeSources();
+  stopFollowing();
   showPage('map');
   requestAnimationFrame(() => { centerOnPoint(points[0]); drawMap(); });
 }
@@ -1828,6 +1841,38 @@ function mapLayerCounts(layer) {
   return out;
 }
 function playerPos() { return dyn().status && dyn().status.position; }
+function isLive() { return !!(dyn().save && dyn().save.live === 'on'); }
+function updateFollowButton() {
+  const btn = $('#map-follow');
+  if (!btn) return;
+  const live = isLive();
+  if (!live && S.map.follow) S.map.follow = false;
+  btn.disabled = !live;
+  btn.setAttribute('aria-pressed', String(!!S.map.follow && live));
+  btn.textContent = S.map.follow && live ? 'Following' : 'Follow';
+  btn.title = live
+    ? (S.map.follow ? 'Stop following Link' : 'Follow Link (keeps Link centered)')
+    : 'Follow Link needs live memory. Launch TotK from the companion.';
+}
+function stopFollowing() {
+  if (!S.map.follow) return;
+  S.map.follow = false;
+  updateFollowButton();
+}
+function followLink(ping) {
+  const p = playerPos();
+  const m = cat().map;
+  const vp = $('#map-viewport');
+  if (!p || !m || !vp || !vp.clientWidth || !vp.clientHeight) return false;
+  const pr = projection();
+  S.map.tx = vp.clientWidth / 2 - pr.x(p.x) * S.map.zoom;
+  S.map.ty = vp.clientHeight / 2 - pr.y(p.z) * S.map.zoom;
+  S.map.pending = null;
+  S.map.fitted = true;
+  applyMap();
+  if (ping) showPlayerPing();
+  return true;
+}
 
 function setMapLayer(layer, keep) {
   if (S.map.layer === layer && keep) return;
@@ -1893,7 +1938,11 @@ function renderMap() {
     ensureHeroPath().then(() => drawMap());
   }
   if (S.map.layer === playerLayer()) showPlayerPing();
-  requestAnimationFrame(() => { if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; } else drawMap(); });
+  requestAnimationFrame(() => {
+    if (S.map.follow && followLink(false)) return;
+    if (!S.map.fitted) { if (fitMap()) S.map.fitted = true; }
+    else drawMap();
+  });
 }
 function renderMapToolbar() {
   const layers = [['depths', 'Depths', 'dark-mode'], ['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud']];
@@ -1930,6 +1979,7 @@ function renderMapToolbar() {
   const path = $('#map-path');
   if (path) path.checked = !!S.map.path;
   renderMapPathNote();
+  updateFollowButton();
   updateSearchClear();
 }
 
@@ -2170,11 +2220,13 @@ function zoomAt(factor, cx, cy) {
   S.map.tx = mx - (mx - S.map.tx) * k;
   S.map.ty = my - (my - S.map.ty) * k;
   S.map.zoom = z;
+  if (S.map.follow && followLink(false)) return;
   applyMap();
 }
 function centerOnItem(item) {
   const m = cat().map;
   if (!m) return;
+  stopFollowing();
   if (!itemOnLayer(item, S.map.layer)) {
     S.map.layer = item.layer;
     renderMapToolbar(); renderMapCats(); loadMapImage();
@@ -3187,6 +3239,7 @@ function renderStatusLine() {
   hint.textContent = sv.live === 'on'
     ? 'Read-only live memory · updates while the game runs'
     : 'Read-only save mode · refreshes when the game saves';
+  updateFollowButton();
 }
 
 /* ------------------------------------------------------------------ static events */
@@ -3347,7 +3400,7 @@ function attachStatic() {
     if (!d) { updateMapHover(e.clientX, e.clientY, e.target); return; }
     hideMapTooltip();
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+    if (Math.abs(dx) + Math.abs(dy) > 3 && !d.moved) { d.moved = true; stopFollowing(); }
     S.map.tx = d.tx + dx; S.map.ty = d.ty + dy;
     applyMap();
   });
@@ -3380,7 +3433,7 @@ function attachStatic() {
       if (!d) { if (vp.contains(e.target)) updateMapHover(e.clientX, e.clientY, e.target); return; }
       hideMapTooltip();
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
-      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      if (Math.abs(dx) + Math.abs(dy) > 3 && !d.moved) { d.moved = true; stopFollowing(); }
       S.map.tx = d.tx + dx; S.map.ty = d.ty + dy;
       applyMap();
     });
@@ -3394,14 +3447,25 @@ function attachStatic() {
   vp.addEventListener('dblclick', (e) => { e.preventDefault(); hideMapTooltip(); zoomAt(1.6, e.clientX, e.clientY); });
   $('#map-zoomin').addEventListener('click', () => zoomAt(1.45));
   $('#map-zoomout').addEventListener('click', () => zoomAt(1 / 1.45));
-  $('#map-fit').addEventListener('click', () => { if (fitMap()) S.map.fitted = true; });
+  $('#map-fit').addEventListener('click', () => { stopFollowing(); if (fitMap()) S.map.fitted = true; });
   $('#map-me').addEventListener('click', centerOnPlayer);
+  $('#map-follow').addEventListener('click', () => {
+    if (!isLive()) { updateFollowButton(); return; }
+    if (S.map.follow) { stopFollowing(); return; }
+    if (!playerPos()) { showPlayerPing(); return; }
+    S.map.follow = true;
+    updateFollowButton();
+    const layer = playerLayer();
+    if (S.map.layer !== layer) setMapLayer(layer);
+    followLink(true);
+  });
 
   const mini = $('#minimap');
   if (mini) {
     mini.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
+      stopFollowing();
       S.map.miniDrag = true;
       try { mini.setPointerCapture(e.pointerId); } catch (err) {}
       minimapGoto(e);
@@ -3418,6 +3482,7 @@ function attachStatic() {
       mini.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault(); e.stopPropagation();
+        stopFollowing();
         S.map.miniDrag = true;
         minimapGoto(e);
       });
@@ -3510,7 +3575,11 @@ document.addEventListener('click', (e) => {
     S.map.medals = !S.map.medals;
     renderMapCats(); drawMap(); return;
   }
-  if (t.dataset.layer) { setMapLayer(t.dataset.layer); return; }
+  if (t.dataset.layer) {
+    if (t.dataset.layer !== playerLayer()) stopFollowing();
+    setMapLayer(t.dataset.layer);
+    return;
+  }
   if (t.dataset.found) {
     S.map.found = t.dataset.found;
     renderMapToolbar(); renderMapCats(); renderNearby(); drawMap();

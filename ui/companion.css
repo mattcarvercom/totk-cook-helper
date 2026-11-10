@@ -338,6 +338,8 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .map-zoom { position: absolute; top: 10px; right: 52px; z-index: 3; display: flex; gap: 3px; margin: 0; padding: 4px; border: 1px solid var(--line-soft); border-radius: 7px; background: rgba(6,9,12,.82); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .map-zoom .btn { min-width: 32px; padding: 4px 8px; border-color: transparent; background: transparent; }
 .map-zoom .btn:hover { border-color: var(--line-soft); background: rgba(214,196,140,.08); }
+.map-zoom .btn:disabled { opacity: .42; cursor: default; }
+.map-zoom .btn[aria-pressed="true"] { color: var(--gold-hi); border-color: var(--line-strong); background: rgba(214,196,140,.14); }
 .map-viewport { position: relative; min-height: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 10px; background: #06090c; cursor: crosshair; touch-action: none; }
 .map-viewport.grabbing { cursor: grabbing; }
 .map-coords { position: absolute; left: 10px; bottom: 10px; z-index: 2; padding: 4px 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: rgba(6,9,12,.82); color: var(--gold); font: 500 11.5px var(--sc); letter-spacing: .04em; font-variant-numeric: tabular-nums; pointer-events: none; }
