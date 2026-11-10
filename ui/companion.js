@@ -3587,7 +3587,8 @@ function renderStatusLine() {
   } else {
     const next = sv.next_scan ? Math.max(0, Math.ceil(sv.next_scan - Date.now() / 1000)) : null;
     const slot = sv.slot ? sv.slot.replace('_', ' ') : 'save';
-    el.innerHTML = `${esc(slot)}, saved ${ago(sv.mtime)}${next !== null ? ` · next check in ${next}s` : ''}`;
+    const warn = sv.live_error ? ' · <span class="warn">live unavailable</span>' : '';
+    el.innerHTML = `${esc(slot)}, saved ${ago(sv.mtime)}${next !== null ? ` · next check in ${next}s` : ''}${warn}`;
   }
   hint.textContent = sv.live === 'on'
     ? (sv.live_pouch === 'on'
@@ -3599,7 +3600,7 @@ function renderStatusLine() {
             : sv.live_data === 'on'
               ? 'Read-only live memory · material counts follow the last save'
               : (sv.live_data_error || 'Live position only; save polling continues'))
-    : 'Read-only save mode · refreshes when the game saves';
+    : (sv.live_error || 'Read-only save mode · refreshes when the game saves');
   updateFollowButton();
 }
 

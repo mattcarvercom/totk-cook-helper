@@ -510,6 +510,7 @@ class App:
         if self.launch_game:
             self.start_game()
         self.poll_once(force=True)
+        self.note_external_game()
         if self.payload is None:
             self.push()
         if self.s['start_hidden']:
@@ -547,6 +548,18 @@ class App:
         except OSError as e:
             self.live_error = str(e)[:200]
             return False
+
+    def note_external_game(self):
+        """Explain why live mode is off when TotK was started elsewhere."""
+        if self.launch_game or self.live_pid or self.live_active:
+            return
+        if live_save.find_pid(self.game):
+            if not self.live_error:
+                self.live_error = 'TotK is running outside the companion'
+                self.push_status()
+        elif self.live_error == 'TotK is running outside the companion':
+            self.live_error = None
+            self.push_status()
 
     def _request_launch(self, signum=None, frame=None):
         self._launch_requested = True
@@ -596,13 +609,24 @@ class App:
                 self.live_error = 'start TotK from the companion for live memory'
                 print('live: unavailable: %s' % e, file=sys.stderr, flush=True)
                 return
-            except (live_save.NotRunning, OSError) as e:
+            except live_save.NotRunning as e:
                 self.live_active = False
                 self.live_state = None
                 self.live_pid = None
                 self.live_error = 'the game exited'
                 print('live: stopped: %s' % e, file=sys.stderr, flush=True)
                 return
+            except OSError as e:
+                # Loading screens and menus can briefly leave the actor graph
+                # pointing at unmapped memory. Re-find the process and retry
+                # instead of treating it as a closed game.
+                self.live_active = False
+                self.live_state = None
+                self.live_pid = None
+                self.live_error = 'waiting for the game world'
+                print('live: retrying: %s' % e, file=sys.stderr, flush=True)
+                time.sleep(LIVE_POLL_S)
+                continue
             if state:
                 if not self.live_active:
                     layer = ('UnderGround' if state['y'] < -100
@@ -775,6 +799,16 @@ class App:
                     print('live pouch: %s' % e, file=sys.stderr, flush=True)
                     time.sleep(1.0)
                     continue
+                except Exception as e:
+                    pouch = None
+                    failed_at = time.time()
+                    self.live_pouch_state = 'failed'
+                    self.live_pouch_error = '%s: %s' % (e.__class__.__name__, str(e)[:120])
+                    self.push_status()
+                    print('live pouch: %s' % traceback.format_exc(),
+                          file=sys.stderr, flush=True)
+                    time.sleep(1.0)
+                    continue
                 self.live_pouch = pouch
                 self.live_pouch_state = 'on'
                 self.live_pouch_error = None
@@ -791,6 +825,19 @@ class App:
                 self.live_pouch_error = str(e)[:120]
                 self.live_materials = None
                 self.push_status()
+                failed_at = time.time()
+                time.sleep(1.0)
+                continue
+            except Exception as e:
+                pouch.close()
+                pouch = None
+                self.live_pouch = None
+                self.live_pouch_state = 'failed'
+                self.live_pouch_error = '%s: %s' % (e.__class__.__name__, str(e)[:120])
+                self.live_materials = None
+                self.push_status()
+                print('live pouch: %s' % traceback.format_exc(),
+                      file=sys.stderr, flush=True)
                 failed_at = time.time()
                 time.sleep(1.0)
                 continue
@@ -1050,6 +1097,7 @@ class App:
                 self._launch_requested = False
                 self.launch_game_now()
             self.next_scan = time.time() + self.poll_s
+            self.note_external_game()
             self.poll_once()
             while not self.closing and time.time() < self.next_scan:
                 if self._launch_requested:
