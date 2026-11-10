@@ -160,7 +160,10 @@ Marker images are trimmed to their visible bounds so small icons such as wells
 use the same size on the map. The layer list is a two-column grid when the pane
 is wide enough and collapses to one scrolling column when it is narrow. It runs
 from fast travel and major places down to collectibles instead of sorting by
-marker count. Found/Missing applies to every tracked marker layer, including shrines,
+marker count. Search is limited to the selected layers and markers by default;
+**Search all** expands it to every layer, marker, and place label. Results are
+stacked under headers for exact and fuzzy matches, split into POI labels,
+place labels, and other markers. Clicking a place label centers the map on it. Found/Missing applies to every tracked marker layer, including shrines,
 towers, lightroots, and place layers with complete discovery data: villages,
 stables, Great Fairies, Dragon's Tears, and device dispensers. All and Found
 show found/total; Missing shows missing/total and draws only the missing

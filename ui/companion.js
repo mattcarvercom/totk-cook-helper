@@ -16,6 +16,7 @@ const S = {
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
   map: { layer: 'surface', zoom: 1, tx: 0, ty: 0, cats: new Set(), found: 'found', search: '', sel: null,
          reveal: false, labels: true, poiLabels: true, follow: false, medals: true, path: false, pathData: null, pathFor: -1, pathLoading: false,
+         searchAll: false, labelSel: null,
          fitted: false, layerSet: false, pending: null, raf: 0, drag: null, hitPoints: [],
          iconImages: {}, activeReveal: null, activeRevealFor: null, pingUntil: 0, pingTimer: 0, pingFadeTimer: 0,
          sources: [], sourceMat: null, sourceSel: null, sourceTotal: 0,
@@ -577,6 +578,8 @@ function resetFilters() {
   S.map.reveal = false;
   S.map.medals = true;
   S.map.path = false;
+  S.map.searchAll = false;
+  S.map.labelSel = null;
   S.map.sel = null;
   S.map.sourceSel = null;
   S.map.sourceMat = null;
@@ -1664,6 +1667,7 @@ function showMaterialSources(actor, mode) {
   S.map.sourceSel = null;
   S.map.sourceTotal = total;
   S.map.sel = null;
+  S.map.labelSel = null;
   const layers = {};
   for (const p of points) layers[p.layer] = (layers[p.layer] || 0) + 1;
   const layer = Object.keys(layers).sort((a, b) => layers[b] - layers[a])[0] || points[0].layer;
@@ -1698,6 +1702,7 @@ function showSourceGroup(actor, kind, label) {
   S.map.sourceSel = null;
   S.map.sourceTotal = total;
   S.map.sel = null;
+  S.map.labelSel = null;
   S.map.layer = points[0].layer;
   S.map.layerSet = true;
   S.map.fitted = true;
@@ -1759,15 +1764,29 @@ function mapVisible() {
   }
   return out;
 }
+function isExactNameMatch(query, text) {
+  const q = normText(query), t = normText(text);
+  return !!q && t.includes(q);
+}
+function searchMarkerGroup(item) {
+  return MAP_LABEL_MIN_ZOOM[item.cat] ? 'poi' : 'marker';
+}
 function searchResults() {
   const q = S.map.search.trim();
-  if (!q) return [];
+  if (!q) return null;
   const p = playerPos();
   const states = (dyn().completion && dyn().completion.states) || [];
-  const out = [];
+  const groups = {
+    exact: { poi: [], place: [], marker: [] },
+    fuzzy: { poi: [], place: [], marker: [] },
+  };
+  const add = (match, kind, row) => groups[match][kind].push(row);
   for (let i = 0; i < (cat().collectibles || []).length; i++) {
     const it = cat().collectibles[i];
     if (it.map_hidden) continue;
+    if (!S.map.searchAll) {
+      if (!S.map.cats.has(it.cat) || !itemOnLayer(it, S.map.layer)) continue;
+    }
     const st = states[i] || 0;
     const only = mapOnly(it.cat);
     if (mapTracked(it.cat)) {
@@ -1776,12 +1795,30 @@ function searchResults() {
     }
     const score = Math.max(fuzzyScore(q, it.name),
                            fuzzyScore(q, catMeta(it.cat).label) * 0.55);
-    if (score > 0) out.push({ item: it, index: i, state: st, score: score, mapOnly: only });
+    if (score <= 0) continue;
+    add(isExactNameMatch(q, it.name) ? 'exact' : 'fuzzy', searchMarkerGroup(it),
+        { type: 'marker', item: it, index: i, state: st, score: score, mapOnly: only });
   }
-  out.sort((a, b) => b.score - a.score ||
-    (p ? dist3(p, a.item) - dist3(p, b.item) : 0) ||
-    a.item.name.localeCompare(b.item.name));
-  return out;
+  for (let i = 0; i < (cat().map_labels || []).length; i++) {
+    const label = cat().map_labels[i];
+    if (!S.map.searchAll && label.layer !== S.map.layer) continue;
+    const score = fuzzyScore(q, label.name);
+    if (score <= 0) continue;
+    add(isExactNameMatch(q, label.name) ? 'exact' : 'fuzzy', 'place',
+        { type: 'label', label: label, index: i, score: score });
+  }
+  const distance = (row) => {
+    const obj = row.item || row.label;
+    return p ? dist3(p, obj) : 0;
+  };
+  for (const match of ['exact', 'fuzzy']) {
+    for (const kind of ['poi', 'place', 'marker']) {
+      groups[match][kind].sort((a, b) => b.score - a.score ||
+        distance(a) - distance(b) ||
+        (a.item ? a.item.name : a.label.name).localeCompare(b.item ? b.item.name : b.label.name));
+    }
+  }
+  return groups;
 }
 function activeRevealSets() {
   const comp = dyn().completion;
@@ -1899,6 +1936,7 @@ function setMapLayer(layer, keep) {
   S.map.layer = layer;
   S.map.sel = null;
   S.map.sourceSel = null;
+  S.map.labelSel = null;
   S.map.pending = null;
   renderMapToolbar();
   renderMapCats();
@@ -2067,6 +2105,20 @@ function renderMapCats() {
 }
 function renderMapDetail() {
   const el = $('#map-detail');
+  if (S.map.labelSel && !S.map.sel) {
+    const lbl = S.map.labelSel;
+    const p = playerPos();
+    const d = p ? dist3(p, lbl) : null;
+    const deg = p ? bearing(p, lbl) : null;
+    const tier = String(lbl.tier || 'place');
+    el.hidden = false;
+    el.innerHTML = `<div class="md-head"><div><h2>${esc(lbl.name)}</h2>` +
+      `<div class="d-sub">Place label · ${layerLabel(lbl.layer)} · ${esc(tier)}</div></div></div>` +
+      `<div class="k">Position</div><div class="v">${fmtXYZ(lbl.x, lbl.y, lbl.z)}</div>` +
+      (d !== null ? `<div class="k">From Link</div><div class="v">${fmtDist(d)}${dirIcon(deg)}<span class="dir-label">${cardinal(deg)}</span></div>` : '') +
+      `<div class="actions" style="margin-top:10px"><button class="btn" data-mcenterlabel="${cat().map_labels.indexOf(lbl)}">${micon('my-location', '', 'sm')} Center</button></div>`;
+    return;
+  }
   const id = S.map.sel;
   if (id) {
     const item = (cat().collectibles || []).find((x) => x.id === id);
@@ -2142,10 +2194,39 @@ function renderResultsNote(searching) {
   const note = $('#map-results-note');
   if (!note) return;
   if (!searching) { note.hidden = true; note.innerHTML = ''; return; }
-  if (S.map.found === 'all') { note.hidden = true; note.innerHTML = ''; return; }
+  const scope = S.map.searchAll ? 'all layers and markers' : 'selected layers and markers';
   note.hidden = false;
-  note.innerHTML = `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only for tracked markers</span>` +
-    '<button data-maprelax="found">Show all types</button>';
+  note.innerHTML = `<span>Searching <b>${scope}</b>${S.map.searchAll ? '' : ' to avoid spoilers'}.</span>` +
+    `<button data-mapsearchall="${S.map.searchAll ? '0' : '1'}">${S.map.searchAll ? 'Selected only' : 'Search all'}</button>` +
+    (S.map.found === 'all' ? '' :
+      `<span><b>${S.map.found === 'found' ? 'Found' : 'Missing'}</b> only for tracked markers</span>` +
+      '<button data-maprelax="found">Show all types</button>');
+}
+
+function searchResultRow(x, p) {
+  if (x.type === 'label') {
+    const label = x.label;
+    const d = p ? dist3(p, label) : null;
+    const deg = p ? bearing(p, label) : null;
+    const metaText = ['Place label', layerLabel(label.layer), label.tier].filter(Boolean).join(' · ');
+    return `<button data-mlabel="${x.index}">` +
+      `<span class="nico label-ico">${micon('map', '', 'sm')}</span>` +
+      `<span><span>${esc(label.name)}</span><span class="meta">${esc(metaText)}</span></span>` +
+      `<span class="dist">${dirIcon(deg)}${d === null ? '' : ` ${fmtDist(d)}`}</span></button>`;
+  }
+  const it = x.item;
+  const d = p ? dist3(p, it) : null;
+  const deg = p ? bearing(p, it) : null;
+  const meta = catMeta(it.cat);
+  const only = !!meta.map_only;
+  const state = only ? '' : x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
+  const iconFile = it.icon || mapIconFile(it.cat, x.state);
+  const layer = itemOnLayer(it, S.map.layer) ? '' : layerLabel(it.layer);
+  const metaText = [meta.label, state, layer].filter(Boolean).join(' · ');
+  return `<button data-midx="${x.index}">` +
+    (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
+    `<span><span>${esc(it.name)}</span><span class="meta">${esc(metaText)}</span></span>` +
+    `<span class="dist">${dirIcon(deg)}${d === null ? '' : ` ${fmtDist(d)}`}</span></button>`;
 }
 
 function renderNearby() {
@@ -2154,8 +2235,8 @@ function renderNearby() {
   const p = playerPos();
   const searching = S.map.search.trim() !== '';
   renderResultsNote(searching);
-  let items = searching ? searchResults() : mapVisible();
   if (!searching) {
+    let items = mapVisible();
     items.sort((a, b) => {
       if (p) {
         const da = dist3(p, a.item), db = dist3(p, b.item);
@@ -2163,32 +2244,47 @@ function renderNearby() {
       }
       return a.item.name.localeCompare(b.item.name);
     });
-  }
-  const total = items.length;
-  items = items.slice(0, searching ? 60 : 40);
-  if (!items.length) {
-    if (title) title.hidden = true;
-    el.hidden = true;
-    el.innerHTML = '';
+    const total = items.length;
+    items = items.slice(0, 40);
+    if (!items.length) {
+      if (title) title.hidden = true;
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+    if (title) { title.hidden = false; title.textContent = 'Near Link'; }
+    el.hidden = false;
+    el.innerHTML = items.map((x) => searchResultRow(
+      { type: 'marker', item: x.item, index: x.index, state: x.state }, p)).join('');
     return;
   }
-  if (title) { title.hidden = false; title.textContent = searching ? `Results (${total})` : 'Near Link'; }
+  const groups = searchResults();
+  const sections = [
+    ['exact', 'poi', 'Exact matches · POI labels'],
+    ['exact', 'place', 'Exact matches · place labels'],
+    ['exact', 'marker', 'Exact matches · other markers'],
+    ['fuzzy', 'poi', 'Fuzzy matches · POI labels'],
+    ['fuzzy', 'place', 'Fuzzy matches · place labels'],
+    ['fuzzy', 'marker', 'Fuzzy matches · other markers'],
+  ];
+  let total = 0, html = '';
+  for (const [match, kind, label] of sections) {
+    const rows = groups[match][kind];
+    total += rows.length;
+    if (!rows.length) continue;
+    html += `<div class="nearby-head">${label}<span>${rows.length}</span></div>`;
+    for (const row of rows.slice(0, 20)) html += searchResultRow(row, p);
+    if (rows.length > 20) html += `<div class="nearby-more">+${rows.length - 20} more matches</div>`;
+  }
+  if (!total) {
+    if (title) { title.hidden = false; title.textContent = 'Results (0)'; }
+    el.hidden = false;
+    el.innerHTML = `<div class="empty">No matches in ${S.map.searchAll ? 'all layers and markers' : 'the selected layers and markers'}.</div>`;
+    return;
+  }
+  if (title) { title.hidden = false; title.textContent = `Results (${total})`; }
   el.hidden = false;
-  el.innerHTML = items.map((x) => {
-    const d = p ? dist3(p, x.item) : null;
-    const deg = p ? bearing(p, x.item) : null;
-    const meta = catMeta(x.item.cat);
-    const only = !!meta.map_only;
-    const state = only ? '' : x.state >= 2 ? 'Complete' : x.state === 1 ? 'Started' : 'Missing';
-    const iconFile = x.item.icon || mapIconFile(x.item.cat, x.state);
-    const layer = itemOnLayer(x.item, S.map.layer) ? '' : layerLabel(x.item.layer);
-    const metaText = [meta.label, state, layer].filter(Boolean).join(' · ');
-    return `<button data-midx="${x.index}">` +
-      (iconFile ? `<img class="nico" src="companion_data/${encodeURI(iconFile)}" alt="">` : '<span></span>') +
-      `<span><span>${esc(x.item.name)}</span>` +
-      `<span class="meta">${esc(metaText)}</span></span>` +
-      `<span class="dist">${dirIcon(deg)}${d === null ? '' : ` ${fmtDist(d)}`}</span></button>`;
-  }).join('');
+  el.innerHTML = html;
 }
 function fitMap() {
   const m = cat().map;
@@ -2247,6 +2343,7 @@ function centerOnItem(item) {
   const m = cat().map;
   if (!m) return;
   stopFollowing();
+  S.map.labelSel = null;
   if (!itemOnLayer(item, S.map.layer)) {
     S.map.layer = item.layer;
     renderMapToolbar(); renderMapCats(); loadMapImage();
@@ -2263,8 +2360,34 @@ function centerOnItem(item) {
   applyMap();
   renderMapDetail(); renderNearby();
 }
+function centerOnLabel(index) {
+  const label = (cat().map_labels || [])[Number(index)];
+  if (!label) return;
+  if (S.map.layer !== label.layer) {
+    S.map.layer = label.layer;
+    S.map.layerSet = true;
+    renderMapToolbar();
+    renderMapCats();
+    loadMapImage();
+  }
+  S.map.sel = null;
+  S.map.sourceSel = null;
+  S.map.labelSel = label;
+  const pr = projection();
+  const vp = $('#map-viewport');
+  const z = Math.max(S.map.zoom, 1.0);
+  S.map.zoom = z;
+  S.map.tx = vp.clientWidth / 2 - pr.x(label.x) * z;
+  S.map.ty = vp.clientHeight / 2 - pr.y(label.z) * z;
+  S.map.pending = null;
+  S.map.fitted = true;
+  applyMap();
+  renderMapDetail();
+}
+
 function centerOnPoint(point) {
   if (!point) return;
+  S.map.labelSel = null;
   if (S.map.layer !== point.layer) {
     S.map.layer = point.layer;
     renderMapToolbar(); renderMapCats(); loadMapImage();
@@ -2378,6 +2501,21 @@ function drawHeroPath(ctx, w, h, pr) {
   ctx.restore();
 }
 
+function drawLabelFocus(ctx, w, h, pr) {
+  const label = S.map.labelSel;
+  if (!label) return;
+  const sx = S.map.tx + pr.x(label.x) * S.map.zoom;
+  const sy = S.map.ty + pr.y(label.z) * S.map.zoom;
+  if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(245,238,218,.92)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 13, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawMap() {
   const m = cat().map;
   if (!m) return;
@@ -2410,6 +2548,7 @@ function drawMap() {
   drawRegionLabels(ctx, pts, w, h, pr, markerLabels);
   for (const p of pts) drawMarker(ctx, p.sx, p.sy, base, p.x, p.x.item.id === S.map.sel);
   drawMapLabels(ctx, markerLabels);
+  drawLabelFocus(ctx, w, h, pr);
   drawSources(ctx, w, h, pr);
   drawMedallions(ctx, w, h, pr);
   // Link's position, only on the layer he is actually on.
@@ -2904,6 +3043,7 @@ function mapHitTest(clientX, clientY) {
   if (sbest !== null) {
     S.map.sourceSel = sbest;
     S.map.sel = null;
+    S.map.labelSel = null;
     renderMapDetail(); drawMap();
     return;
   }
@@ -2917,12 +3057,14 @@ function mapHitTest(clientX, clientY) {
   if (best) {
     S.map.sourceSel = null;
     S.map.sel = best.item.id;
+    S.map.labelSel = null;
     renderMapDetail(); renderNearby(); drawMap();
     return;
   }
-  if (S.map.sel || S.map.sourceSel !== null) {
+  if (S.map.sel || S.map.sourceSel !== null || S.map.labelSel) {
     S.map.sel = null;
     S.map.sourceSel = null;
+    S.map.labelSel = null;
     renderMapDetail(); renderNearby(); drawMap();
   }
 }
@@ -3624,6 +3766,19 @@ document.addEventListener('click', (e) => {
     if (t.dataset.maprelax === 'found') S.map.found = 'all';
     else if (t.dataset.maprelax === 'reveal') S.map.reveal = true;
     renderMapToolbar(); renderMapCats(); renderNearby(); drawMap(); requestMinimapDraw();
+    return;
+  }
+  if (t.dataset.mapsearchall !== undefined) {
+    S.map.searchAll = t.dataset.mapsearchall === '1';
+    renderNearby();
+    return;
+  }
+  if (t.dataset.mlabel !== undefined) {
+    centerOnLabel(Number(t.dataset.mlabel));
+    return;
+  }
+  if (t.dataset.mcenterlabel !== undefined) {
+    centerOnLabel(Number(t.dataset.mcenterlabel));
     return;
   }
   if (t.dataset.midx !== undefined) {
