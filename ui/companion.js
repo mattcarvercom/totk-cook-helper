@@ -657,6 +657,7 @@ async function poll(first) {
 function applyLiveStatus(live) {
   if (!live || !live.position) return;
   const prevLayer = S.map.liveLayer;
+  const firstLive = prevLayer === undefined;
   if (S.d && S.d.status) {
     S.d.status.position = live.position;
     S.d.status.heading = live.heading;
@@ -670,13 +671,19 @@ function applyLiveStatus(live) {
     if (S.map.follow) {
       if (S.map.layer !== layer) setMapLayer(layer);
       followLink(false);
-    } else if (prevLayer && prevLayer !== layer) {
-      // Link fast traveled or dived to another layer; keep the map on the
-      // layer he is actually on instead of leaving a stale map up.
+    } else if (firstLive || prevLayer !== layer) {
+      // Link fast traveled or dived to another layer, or live mode just
+      // started on a layer saved from an earlier session; keep the map on
+      // the layer he is actually on instead of leaving a stale map up.
       setMapLayer(layer);
     }
     drawMap();
     requestMinimapDraw();
+  } else if (firstLive && S.map.layer !== layer) {
+    // Live mode began while another tab was open; point the map at Link so
+    // opening it later does not show a layer saved from an earlier session.
+    S.map.layer = layer;
+    S.map.layerSet = true;
   }
 }
 
