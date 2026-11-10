@@ -338,12 +338,12 @@ button.stat:hover, button.vital:hover { border-color: var(--line-strong); backgr
 .map-search-clear:hover { color: var(--gold-hi); background: rgba(214,196,140,.1); }
 .map-search-clear[hidden] { display: none; }
 .map-zoom { position: absolute; top: 10px; right: 52px; z-index: 3; display: flex; gap: 3px; margin: 0; padding: 4px; border: 1px solid var(--line-soft); border-radius: 7px; background: rgba(6,9,12,.82); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-.map-layer-float { position: absolute; left: 10px; top: 10px; z-index: 4; display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: rgba(6,9,12,.82); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.map-layer-float { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: rgba(6,9,12,.82); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .map-layer-float button { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--dim); opacity: .6; }
 .map-layer-float button:hover { border-color: var(--line-soft); background: rgba(214,196,140,.08); opacity: 1; }
 .map-layer-float button[aria-pressed="true"] { border-color: var(--line-strong); background: rgba(214,196,140,.14); opacity: 1; }
 .map-layer-float .layico { width: 27px; height: 27px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
-.map-options { position: absolute; left: 10px; top: 152px; z-index: 5; }
+.map-options { position: absolute; left: 10px; top: 10px; z-index: 5; }
 .map-options-btn { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid var(--line-soft); border-radius: 7px; background: rgba(6,9,12,.82); color: var(--dim); font: 500 12px var(--ui); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .map-options-btn:hover { color: var(--gold-hi); border-color: var(--line-strong); }
 .map-options-btn .msi { width: 15px; height: 15px; }

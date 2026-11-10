@@ -2053,7 +2053,7 @@ function renderMap() {
   });
 }
 function renderMapToolbar() {
-  const layers = [['depths', 'Depths', 'dark-mode'], ['surface', 'Surface', 'landscape'], ['sky', 'Sky', 'cloud']];
+  const layers = [['sky', 'Sky', 'cloud'], ['surface', 'Surface', 'landscape'], ['depths', 'Depths', 'dark-mode']];
   $('#map-layers').innerHTML = layers.map(([k, l, ic]) => {
     const iconFile = (cat().map_icons || {})['layer_' + k];
     const body = iconFile

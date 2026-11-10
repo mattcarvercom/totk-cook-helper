@@ -1938,7 +1938,7 @@ class Builder:
                             ('sky', 'MapTabIcon_Sky')):
             img = decode(source)
             if img is not None:
-                out['layer_' + key] = save_icon('layer_' + key, key_black(img))
+                out['layer_' + key] = save_icon('layer_' + key, tint_icon(img, '#d6c38a'))
 
         for key, source in TEMPLE_ICON_SOURCES.items():
             img = decode(source)
