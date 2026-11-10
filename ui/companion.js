@@ -10,7 +10,7 @@ const call = (name, ...a) => { const x = api(); return x && x[name] ? x[name](..
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const S = {
-  catalog: null, d: null, version: -1, dataVersion: -1, page: 'status',
+  catalog: null, d: null, version: -1, dataVersion: -1, liveDataVersion: -1, page: 'status',
   settings: {}, booted: false, matCounts: {}, saves: [], selectedSave: '', rebuildStarted: false,
   inv: { cat: '', filter: '', sel: null },
   armor: { slot: '', owned: true, set: '', filter: '', sel: null },
@@ -624,13 +624,17 @@ async function poll(first) {
     const p = await call('state', S.version);
     if (p) {
       const changed = first || p.data_version !== S.dataVersion;
+      const liveChanged = (p.live_data_version || 0) !== S.liveDataVersion;
       S.version = p.version;
       S.d = p;
       S.dataVersion = p.data_version;
+      S.liveDataVersion = p.live_data_version || 0;
       if (p.live) applyLiveStatus(p.live);
       if (p.settings) Object.assign(S.settings, p.settings);
-      rebuildMaterialCounts();
-      renderNav();
+      if (changed || liveChanged) {
+        rebuildMaterialCounts();
+        renderNav();
+      }
       if (changed) {
         S.map.pathData = null;
         S.map.pathFor = -1;
@@ -639,6 +643,20 @@ async function poll(first) {
         renderPage(S.page);
         renderStatusLine();
         document.documentElement.dataset.ready = '1';
+      } else if (liveChanged) {
+        S.cook.allRows = null;
+        S.cook.allFor = -1;
+        if (S.page === 'map') {
+          renderMapCats();
+          renderNearby();
+          renderMapDetail();
+          drawMap();
+          requestMinimapDraw();
+          renderStatusLine();
+        } else {
+          renderPage(S.page);
+          renderStatusLine();
+        }
       } else {
         renderStatusLine();
       }
@@ -651,7 +669,8 @@ async function poll(first) {
       }
     }
   } catch (e) { /* window is closing */ }
-  setTimeout(poll, 550);
+  const live = S.d && S.d.save && S.d.save.live === 'on';
+  setTimeout(poll, live ? 150 : 550);
 }
 
 function applyLiveStatus(live) {

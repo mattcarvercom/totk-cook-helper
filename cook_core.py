@@ -120,6 +120,7 @@ class Cook:
         self.dish_names = d['dish_names']
         self.sys = d['system']
         self.effects = d['effects']
+        self._result_cache = {}
 
     def name(self, actor):
         m = self.mat.get(actor)
@@ -151,13 +152,19 @@ class Cook:
 
     def result_for(self, kinds):
         """The recipe the game picks for a pot holding these ingredient kinds."""
+        key = tuple(kinds)
+        if key in self._result_cache:
+            return self._result_cache[key]
         single = len(kinds) == 1
+        result = None
         for r in self.recipes:
             if r['single'] != single:
                 continue
             if self._match(r['parts'], kinds):
-                return r
-        return None
+                result = r
+                break
+        self._result_cache[key] = result
+        return result
 
     def stats(self, pot, recipe):
         """Hearts and effect of a pot (list of actor names, repeats allowed). An estimate: no critical cooks."""

@@ -105,12 +105,16 @@ materials, the map, collectible completion, the Hyrule Compendium and the
 cooking list. It is read-only: it never writes to the save or to the game.
 
 When the companion launches TotK itself, it also reads the game's live player
-actor and updates Link's map position and facing every second. Hearts,
-inventory, and completion still come from the save and refresh when the game
-writes one. If TotK was started another way, the companion stays in save-file
-mode and the map marker moves when the game saves. Use **Settings > Launch
-TotK** or start the companion with `--launch-game`; this needs no sudo and no
-ptrace changes because the game is the companion's child process.
+actor and updates Link's map position and facing several times per second. It
+reads the game's in-memory progress buffer every two seconds, so hearts,
+stamina, rupees, equipment, inventory, armor, completion, compendium, cooking,
+and travel medallions follow the running game instead of waiting for a save.
+The selected save file still supplies the save caption, Hero's Path, and the
+fallback when live memory is unavailable. If TotK was started another way, the
+companion stays in save-file mode and the map marker moves when the game saves.
+Use **Settings > Launch TotK** or start the companion with `--launch-game`;
+this needs no sudo and no ptrace changes because the game is the companion's
+child process.
 
 Build the companion data once, and again after a game update:
 
@@ -181,7 +185,8 @@ Surface and Sky use the Skyview Tower region boundaries, and the Depths reveal
 the Field Map Area around each activated Lightroot, so the shapes are regions
 rather than circles. Travel
 Medallions have their own toggle in the left pane, appear only on their layer,
-and use the game's medallion art without a background plate. **Hero's Path**
+and use the game's medallion art without a background plate. A newly placed
+medallion appears as soon as live memory sees it. **Hero's Path**
 reads `footprint.sav` and draws the recorded trail and death marks for the
 current layer, with a point and distance summary. Link's green triangle points
 in the direction Link faces in the save, using `PlayerStatus.SavePosRadY`. It

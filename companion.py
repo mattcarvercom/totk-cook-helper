@@ -37,7 +37,8 @@ TITLE = 'TotK Companion'
 LIVE_MARKER = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir(),
                            'totk-companion.live')
 POLL_S = 15.0
-LIVE_POLL_S = 1.0
+LIVE_POLL_S = 0.25
+LIVE_SAVE_POLL_S = 2.0
 MIN_POLL_S = 0.5
 SPINNER_MIN_S = 0.35
 
@@ -356,6 +357,15 @@ class App:
         self.live_error = None
         self.live_active = False
         self.live_thread = None
+        self.live_data_thread = None
+        self.live_save = None
+        self.live_save_error = None
+        self.live_data_ok = False
+        self.live_data_version = 0
+        self._live_fingerprint = None
+        self._cook_cache_key = None
+        self._cook_cache = None
+        self._cook_lock = threading.Lock()
         self._launch_requested = False
         try:
             signal.signal(signal.SIGUSR2, self._request_launch)
@@ -444,10 +454,12 @@ class App:
         return ok
 
     def start_live(self):
-        if self.live_thread and self.live_thread.is_alive():
-            return
-        self.live_thread = threading.Thread(target=self.live_loop, daemon=True)
-        self.live_thread.start()
+        if not (self.live_thread and self.live_thread.is_alive()):
+            self.live_thread = threading.Thread(target=self.live_loop, daemon=True)
+            self.live_thread.start()
+        if not (self.live_data_thread and self.live_data_thread.is_alive()):
+            self.live_data_thread = threading.Thread(target=self.live_data_loop, daemon=True)
+            self.live_data_thread.start()
 
     def live_loop(self):
         while not self.closing:
@@ -471,11 +483,14 @@ class App:
                                                max_distance=700)
             except live_save.Unavailable as e:
                 self.live_active = False
+                self.live_state = None
                 self.live_error = 'start TotK from the companion for live memory'
                 print('live: unavailable: %s' % e, file=sys.stderr, flush=True)
                 return
             except (live_save.NotRunning, OSError) as e:
                 self.live_active = False
+                self.live_state = None
+                self.live_pid = None
                 self.live_error = 'the game exited'
                 print('live: stopped: %s' % e, file=sys.stderr, flush=True)
                 return
@@ -498,6 +513,79 @@ class App:
                 self.live_state = None
                 self.live_active = False
             time.sleep(LIVE_POLL_S)
+
+    def live_data_loop(self):
+        """Refresh hearts, inventory, completion and medallions from live memory."""
+        delay = LIVE_SAVE_POLL_S
+        while not self.closing:
+            if self.live_pid and self.live_state is not None:
+                try:
+                    self.refresh_live_save()
+                except live_save.Unavailable:
+                    self.live_save = None
+                    self.live_data_ok = False
+                    self.live_save_error = 'the live save buffer is not readable'
+                    delay = 10.0
+                except live_save.NotRunning:
+                    self.live_save = None
+                    self.live_data_ok = False
+                    self.live_save_error = 'the game exited'
+                    delay = 10.0
+                except (live_save.NotReady, OSError) as e:
+                    self.live_data_ok = False
+                    self.live_save_error = str(e)[:120]
+                    delay = 10.0
+                else:
+                    self.live_data_ok = True
+                    self.live_save_error = None
+                    delay = LIVE_SAVE_POLL_S
+            else:
+                delay = LIVE_SAVE_POLL_S
+            time.sleep(delay)
+
+    def live_fingerprint(self, payload):
+        status = payload.get('status') or {}
+        core_status = {k: status.get(k) for k in
+                       ('hearts', 'stamina', 'energy', 'rupees', 'sages',
+                        'abilities', 'equipped')}
+        return json.dumps([core_status, payload.get('inventory'),
+                           payload.get('completion'), payload.get('compendium'),
+                           payload.get('cooking'), payload.get('travel_medallions')],
+                          sort_keys=True, separators=(',', ':'))
+
+    def refresh_live_save(self):
+        if not self.live_pid:
+            return
+        if not self.live_save or self.live_save.pid != self.live_pid:
+            self.live_save = live_save.LiveSave(
+                self.game, pid=self.live_pid, save_root=self.save_root)
+        data = self.live_save.read()
+        # Use the selected save's footprint for Hero's Path; live progress
+        # data comes from the game's in-memory buffer.
+        path = self.save_path or self.live_save.save_path
+        save = core.Save(path, self.catalog,
+                         os.path.join(DATA, 'cookdata.json'), data=data)
+        payload = self.build(save)
+        state = self.live_state
+        if state and payload.get('status'):
+            y = state['y']
+            payload['status']['position'] = {'x': state['x'], 'y': state['y'],
+                                             'z': state['z']}
+            payload['status']['heading'] = state['heading']
+            payload['status']['layer'] = ('UnderGround' if y < -100
+                                          else 'Sky' if y > 1000 else 'Ground')
+        fingerprint = self.live_fingerprint(payload)
+        if fingerprint == self._live_fingerprint:
+            return
+        self._live_fingerprint = fingerprint
+        self.live_data_version += 1
+        with self.lock:
+            self.version += 1
+            payload['version'] = self.version
+            payload['data_version'] = self.data_version
+            payload['live_data_version'] = self.live_data_version
+            payload['save'] = self.save_status()
+            self.payload = payload
 
     def push_live(self, state):
         with self.lock:
@@ -610,6 +698,10 @@ class App:
                 return
             self.catalog = core.load_catalog(os.path.join(DATA, 'catalog.json'))
             self.cook = cc.Cook(os.path.join(DATA, 'cookdata.json'))
+            with self._cook_lock:
+                self._cook_cache = None
+                self._cook_cache_key = None
+            self._live_fingerprint = None
             self._all_recipes = None
             self._all_recipes_for = None
             self.bootstrap['catalog'] = self.catalog
@@ -688,6 +780,17 @@ class App:
             if path and (force or path != self.save_path or mtime != self.save_mtime):
                 self.checking = True
                 self.push_status()
+                if self.live_active and self.live_data_ok:
+                    # Live memory is authoritative. Keep the disk path and
+                    # caption current for fallback, but do not overwrite the
+                    # live payload with a save that may be many minutes old.
+                    self.save_path, self.save_mtime = path, mtime
+                    self.save = core.Save(path, self.catalog,
+                                          os.path.join(DATA, 'cookdata.json'))
+                    self.error = None
+                    self.checking = False
+                    self.push_status()
+                    return
                 started = time.monotonic()
                 save = core.Save(path, self.catalog, os.path.join(DATA, 'cookdata.json'))
                 # Read the whole dynamic payload once; this is what catches a
@@ -762,7 +865,8 @@ class App:
 
     def empty_payload(self):
         return {
-            'version': self.version, 'data_version': self.data_version, 'save': self.save_status(),
+            'version': self.version, 'data_version': self.data_version,
+            'live_data_version': self.live_data_version, 'save': self.save_status(),
             'status': None, 'inventory': [], 'completion': None, 'compendium': [],
             'cooking': {'dishes': [], 'materials': []}, 'travel_medallions': [],
             'settings': {k: v for k, v in self.s.items()}, 'platform': 'linux',
@@ -773,13 +877,23 @@ class App:
         status = save.status()
         status['inventory_counts'] = {k: sum(1 for _ in inv.get(k, [])) for k in core.CATEGORY_ORDER}
         status['inventory_counts']['arrows'] = inv.get('arrows', [{}])[0].get('count', 0) if inv.get('arrows') else 0
+        # Cooking is expensive and only depends on ingredient counts. Keep the
+        # last result until the pouch materials actually change.
+        mat_key = tuple(sorted((x['actor'], x['count'])
+                               for x in inv.get('materials', [])))
+        with self._cook_lock:
+            if self._cook_cache is None or mat_key != self._cook_cache_key:
+                self._cook_cache = build_cooking(inv, self.cook, self.catalog)
+                self._cook_cache_key = mat_key
+            cooking = self._cook_cache
         payload = {
-            'version': self.version, 'data_version': self.data_version, 'save': self.save_status(),
+            'version': self.version, 'data_version': self.data_version,
+            'live_data_version': self.live_data_version, 'save': self.save_status(),
             'status': status,
             'inventory': enrich_inventory(inv, self.catalog, self.cook, save.pouch_sizes()),
             'completion': save.completion(),
             'compendium': save.compendium(),
-            'cooking': build_cooking(inv, self.cook, self.catalog),
+            'cooking': cooking,
             'travel_medallions': save.travel_medallions(),
             'settings': {k: v for k, v in self.s.items()},
             'platform': 'linux',
