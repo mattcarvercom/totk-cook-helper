@@ -102,8 +102,15 @@ minimize and close buttons.
 The companion is a separate window built from the same game files. It reads the
 newest save and shows Link's status, the full pouch, armor and upgrade
 materials, the map, collectible completion, the Hyrule Compendium and the
-cooking list. It is read-only: it never writes to the save or to the game, and
-it does not read game memory. The map marker moves when the game writes a save.
+cooking list. It is read-only: it never writes to the save or to the game.
+
+When the companion launches TotK itself, it also reads the game's live player
+actor and updates Link's map position and facing every second. Hearts,
+inventory, and completion still come from the save and refresh when the game
+writes one. If TotK was started another way, the companion stays in save-file
+mode and the map marker moves when the game saves. Use **Settings > Launch
+TotK** or start the companion with `--launch-game`; this needs no sudo and no
+ptrace changes because the game is the companion's child process.
 
 Build the companion data once, and again after a game update:
 
@@ -121,11 +128,14 @@ Run it from the repository root:
 
 ```bash
 ./totk-companion.sh --game /path/to/TotK --poll 15
+./totk-companion.sh --game /path/to/TotK --launch-game
 ```
 
 `--check` prints the save, heart, rupee, inventory, completion and compendium
 counts without opening the window. `--poll N` sets the save scan interval in
-seconds (default 15).
+seconds (default 15). `--launch-game` starts TotK as the companion's child so
+live position and facing work. The `launch-totk` wrapper does this
+automatically when it starts the companion.
 
 The map has Surface, Sky and Depths layers. It uses the game's own marker
 icons, a small overview inset, and a player layer based on Link's height

@@ -71,9 +71,12 @@ def f32(b, off):
 
 
 class Save:
-    def __init__(self, path, catalog=None, cookdata_path=None):
-        with open(path, 'rb') as f:
-            self.b = f.read()
+    def __init__(self, path, catalog=None, cookdata_path=None, data=None):
+        if data is None:
+            with open(path, 'rb') as f:
+                self.b = f.read()
+        else:
+            self.b = data
         self.path = path
         self.table = {}
         self.guid_offset = 0
@@ -200,7 +203,12 @@ class Save:
         if life is None:
             life = max_life
         pos = self.vec3('PlayerStatus.SavePos')
-        heading = self.f32('PlayerStatus.SavePosRadY')
+        raw_heading = self.f32('PlayerStatus.SavePosRadY')
+        heading = None
+        if raw_heading is not None:
+            # Save rotation is south-zero; the map uses north-zero, clockwise.
+            heading = math.atan2(math.sin(math.pi - raw_heading),
+                                 math.cos(math.pi - raw_heading))
         sages = []
         for key, name in SAGES:
             base = 'PlayerStatus.Companion.%s.' % key

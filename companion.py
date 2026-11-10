@@ -2,12 +2,15 @@
 
 A read-only window over the newest Tears of the Kingdom save: status, inventory,
 armor upgrades, the map, completion tracking, the compendium, and cooking. It
-never writes to the save and does not read game memory. The view refreshes when
-the game writes a save.
+never writes to the save or the game. When the companion launches the game it
+also reads the game's in-memory copy of the save, so position, facing, hearts,
+inventory, and completion update while playing. If the game was started some
+other way the companion falls back to save-file polling.
 
 Run from the repository root:
 
     python3 companion.py --game /path/to/TotK
+    python3 companion.py --game /path/to/TotK --launch-game
 """
 import argparse
 import fcntl
@@ -15,6 +18,7 @@ import glob
 import json
 import os
 import re
+import signal
 import struct
 import subprocess
 import sys
@@ -24,12 +28,16 @@ import time
 
 import cook_core as cc
 import companion_core as core
+import live_save
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS = os.path.join(HERE, 'companion_settings.json')
 DATA = os.path.join(HERE, 'ui', 'companion_data')
 TITLE = 'TotK Companion'
+LIVE_MARKER = os.path.join(os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir(),
+                           'totk-companion.live')
 POLL_S = 15.0
+LIVE_POLL_S = 1.0
 MIN_POLL_S = 0.5
 SPINNER_MIN_S = 0.35
 
@@ -292,8 +300,11 @@ class Api:
         self._app.set_setting(key, value)
 
     def refresh(self):
-        self._app.poll_once()
+        self._app.poll_once(force=True)
         self._app.push()
+
+    def launch_game(self):
+        return self._app.launch_game_now()
 
     def rebuild(self):
         return self._app.start_rebuild()
@@ -316,7 +327,7 @@ class Api:
 
 
 class App:
-    def __init__(self, game, poll_s=POLL_S):
+    def __init__(self, game, poll_s=POLL_S, launch_game=False):
         self.game = os.path.abspath(game)
         self.save_root = os.path.join(self.game, 'profile', 'save')
         self.catalog = core.load_catalog(os.path.join(DATA, 'catalog.json'))
@@ -337,6 +348,19 @@ class App:
         self.checking = False
         self._all_recipes = None
         self._all_recipes_for = None
+        self.launch_game = bool(launch_game)
+        self.game_proc = None
+        self.live_pid = None
+        self.live_state = None
+        self.live_at = 0.0
+        self.live_error = None
+        self.live_active = False
+        self.live_thread = None
+        self._launch_requested = False
+        try:
+            signal.signal(signal.SIGUSR2, self._request_launch)
+        except (ValueError, OSError):
+            pass
         self.poll_s = max(MIN_POLL_S, float(self.s.get('poll_s') or poll_s))
         self.s['poll_s'] = self.poll_s
         self.rebuild_state = {'running': False, 'done': False, 'error': None,
@@ -367,6 +391,8 @@ class App:
             'platform': 'linux',
         }
         self.next_scan = time.time() + self.poll_s
+        if self.launch_game:
+            self.start_game()
         self.poll_once(force=True)
         if self.payload is None:
             self.push()
@@ -376,6 +402,109 @@ class App:
             except Exception:
                 pass
         threading.Thread(target=self.loop, daemon=True).start()
+        if self.launch_game:
+            self.start_live()
+
+    # --- live memory ----------------------------------------------------------
+
+    def start_game(self):
+        """Start TotK as this process's child so live memory is readable."""
+        if self.game_proc and self.game_proc.poll() is None:
+            return True
+        exe = os.path.join(self.game, 'totk')
+        if not os.path.isfile(exe):
+            self.live_error = 'totk was not found in the game folder'
+            return False
+        if live_save.find_pid(self.game):
+            self.live_error = 'TotK is already running outside the companion'
+            return False
+        try:
+            self.game_proc = subprocess.Popen(
+                [exe], cwd=self.game, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True)
+            self.live_pid = self.game_proc.pid
+            self.live_state = None
+            self.live_active = False
+            self.live_error = None
+            return True
+        except OSError as e:
+            self.live_error = str(e)[:200]
+            return False
+
+    def _request_launch(self, signum=None, frame=None):
+        self._launch_requested = True
+
+    def launch_game_now(self):
+        ok = self.start_game()
+        if ok:
+            self.launch_game = True
+            self.start_live()
+        self.push()
+        return ok
+
+    def start_live(self):
+        if self.live_thread and self.live_thread.is_alive():
+            return
+        self.live_thread = threading.Thread(target=self.live_loop, daemon=True)
+        self.live_thread.start()
+
+    def live_loop(self):
+        while not self.closing:
+            if self.live_pid is None:
+                self.live_pid = live_save.find_pid(self.game)
+            if not self.live_pid:
+                self.live_active = False
+                time.sleep(LIVE_POLL_S)
+                continue
+            try:
+                anchor = None
+                if self.live_state:
+                    anchor = (self.live_state['x'], self.live_state['z'])
+                else:
+                    saved = (self.payload or {}).get('status') or {}
+                    saved_pos = saved.get('position')
+                    if saved_pos:
+                        anchor = (saved_pos['x'], saved_pos['z'])
+                state = live_save.player_state(self.live_pid, anchor=anchor,
+                                               max_distance=700)
+            except live_save.Unavailable as e:
+                self.live_active = False
+                self.live_error = 'start TotK from the companion for live memory'
+                print('live: unavailable: %s' % e, file=sys.stderr, flush=True)
+                return
+            except (live_save.NotRunning, OSError) as e:
+                self.live_active = False
+                self.live_error = 'the game exited'
+                print('live: stopped: %s' % e, file=sys.stderr, flush=True)
+                return
+            if state:
+                self.live_state = state
+                self.live_at = time.time()
+                self.live_active = True
+                self.live_error = None
+                self.push_live(state)
+            else:
+                self.live_active = False
+            time.sleep(LIVE_POLL_S)
+
+    def push_live(self, state):
+        with self.lock:
+            if self.payload is None:
+                return
+            status = self.payload.get('status')
+            if not status:
+                return
+            pos = {'x': state['x'], 'y': state['y'], 'z': state['z']}
+            y = state['y']
+            layer = 'UnderGround' if y < -100 else 'Sky' if y > 1000 else 'Ground'
+            status['position'] = pos
+            status['heading'] = state['heading']
+            status['layer'] = layer
+            self.payload['live'] = {'position': pos, 'heading': state['heading'],
+                                    'layer': layer}
+            self.payload['version'] += 1
+            self.payload['save'] = self.save_status()
 
     def hide(self):
         if self.window:
@@ -390,6 +519,7 @@ class App:
 
     def on_closing(self):
         self.closing = True
+        clear_live_marker()
         save_settings(self.s)
 
     # --- settings -------------------------------------------------------------
@@ -530,9 +660,14 @@ class App:
 
     def loop(self):
         while not self.closing:
+            if self._launch_requested:
+                self._launch_requested = False
+                self.launch_game_now()
             self.next_scan = time.time() + self.poll_s
             self.poll_once()
             while not self.closing and time.time() < self.next_scan:
+                if self._launch_requested:
+                    break
                 time.sleep(min(0.2, max(0.0, self.next_scan - time.time())))
 
     def poll_once(self, force=False):
@@ -590,7 +725,10 @@ class App:
         return {'slot': os.path.basename(os.path.dirname(self.save_path)) if self.save_path else None,
                 'path': self.save_path, 'dir': os.path.dirname(self.save_path) if self.save_path else None,
                 'caption': caption, 'caption_v': caption_v,
-                'mtime': self.save_mtime, 'error': self.error, 'live': 'off',
+                'mtime': self.live_at if self.live_active else self.save_mtime,
+                'error': self.error,
+                'live': 'on' if self.live_active else 'off',
+                'live_error': self.live_error,
                 'checking': self.checking, 'next_scan': self.next_scan, 'poll_s': self.poll_s,
                 'rebuild': dict(self.rebuild_state)}
 
@@ -671,6 +809,24 @@ def read_caption(save_path):
         return None, None
 
 
+def write_live_marker():
+    try:
+        with open(LIVE_MARKER, 'w', encoding='ascii') as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def clear_live_marker():
+    try:
+        with open(LIVE_MARKER, encoding='ascii') as f:
+            if f.read().strip() != str(os.getpid()):
+                return
+        os.remove(LIVE_MARKER)
+    except OSError:
+        pass
+
+
 def already_running():
     path = os.path.join(tempfile.gettempdir(), 'totk-companion.lock')
     handle = open(path, 'w')
@@ -696,6 +852,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description='TotK Companion, Linux save mode')
     ap.add_argument('--game', help='folder holding romfs and profile/save; default: ../game or ~/Games/TotK')
     ap.add_argument('--poll', type=float, default=POLL_S, help='seconds between save scans (default: 15)')
+    ap.add_argument('--launch-game', action='store_true',
+                    help='start TotK as a child process so live memory can be read')
     ap.add_argument('--check', action='store_true', help='read the newest save, print a summary, and exit')
     args = ap.parse_args(argv)
 
@@ -733,7 +891,12 @@ def main(argv=None):
     if already_running():
         print('TotK Companion is already running.', file=sys.stderr)
         return 1
-    App(game, args.poll).run()
+    app = App(game, args.poll, launch_game=args.launch_game)
+    write_live_marker()
+    try:
+        app.run()
+    finally:
+        clear_live_marker()
     return 0
 
 

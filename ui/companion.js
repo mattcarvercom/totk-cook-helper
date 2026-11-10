@@ -624,6 +624,7 @@ async function poll(first) {
       S.version = p.version;
       S.d = p;
       S.dataVersion = p.data_version;
+      if (p.live) applyLiveStatus(p.live);
       if (p.settings) Object.assign(S.settings, p.settings);
       rebuildMaterialCounts();
       renderNav();
@@ -648,6 +649,21 @@ async function poll(first) {
     }
   } catch (e) { /* window is closing */ }
   setTimeout(poll, 550);
+}
+
+function applyLiveStatus(live) {
+  if (!live || !live.position) return;
+  if (S.d && S.d.status) {
+    S.d.status.position = live.position;
+    S.d.status.heading = live.heading;
+    S.d.status.layer = live.layer;
+  }
+  const pos = document.querySelector('[data-live-pos]');
+  if (pos) pos.textContent = fmtXYZ(live.position.x, live.position.y, live.position.z);
+  if (S.page === 'map') {
+    drawMap();
+    requestMinimapDraw();
+  }
 }
 
 function rebuildMaterialCounts() {
@@ -945,7 +961,7 @@ function renderStatus() {
       </div>
 
       <div class="status-meta">
-        <span>${fmtXYZ(pos.x, pos.y, pos.z)}</span>
+        <span data-live-pos>${fmtXYZ(pos.x, pos.y, pos.z)}</span>
         <span>${esc(layer)}</span>
       </div>
 
@@ -2713,7 +2729,7 @@ function drawMedallions(ctx, w, h, pr) {
 function drawPlayer(ctx, x, y) {
   const icon = S.map.iconImages && S.map.iconImages['mapicons/player.webp'];
   const heading = dyn().status && dyn().status.heading;
-  const angle = heading === null || heading === undefined ? 0 : Math.PI - heading;
+  const angle = heading === null || heading === undefined ? 0 : heading;
   if (icon && icon.complete && icon.naturalWidth) {
     const size = clamp(16 + Math.log2(S.map.zoom + 3) * 2.6, 18, 34);
     ctx.save();
@@ -3087,6 +3103,12 @@ function pollSelect() {
     values.map((v) => `<option value="${v}"${v === current ? ' selected' : ''}>${v} seconds</option>`).join('') +
     `</select>`;
 }
+function liveSettingsText() {
+  const sv = dyn().save || {};
+  if (sv.live === 'on') return 'Live memory is on. Position and facing update while you play; hearts, inventory, and completion refresh when the game saves.';
+  if (sv.live_error) return `${sv.live_error}. Save polling still works. Launch TotK from here to enable live memory next time.`;
+  return 'Launch TotK from the companion to read the in-memory save. If you start the game another way, the companion stays in save-file mode.';
+}
 function rebuildStatusText() {
   const rb = dyn().save && dyn().save.rebuild;
   if (!rb) return 'Rebuild icons, maps, and item data from the game files. This can take several minutes.';
@@ -3107,6 +3129,7 @@ function renderSettings() {
     `<div class="row"><span class="t">Always on top</span><button class="switch" data-setkey="on_top" role="switch" aria-checked="${!!st.on_top}"></button><span class="s">Keeps the window above the game in borderless fullscreen.</span></div>` +
     `<div class="row"><span class="t">Start minimized</span><button class="switch" data-setkey="start_hidden" role="switch" aria-checked="${!!st.start_hidden}"></button><span class="s">Applies the next time the companion starts.</span></div>` +
     `<div class="row"><span class="t">Save slot</span><select id="save-slot" class="select" style="max-width:230px" aria-label="Save slot"></select><span class="s">Auto shows the newest save. Pick a slot to keep the companion on one character.</span></div>` +
+    `<div class="row"><span class="t">Live memory</span><button class="btn" data-act="launch-game"${(dyn().save && dyn().save.live === 'on') ? ' disabled' : ''}>${(dyn().save && dyn().save.live === 'on') ? 'Live' : 'Launch TotK'}</button><span class="s">${esc(liveSettingsText())}</span></div>` +
     `<div class="row"><span class="t">Refresh interval</span>${pollSelect()}<span class="s">The window checks for a newer save on this interval. Use Refresh now to check immediately.</span></div>` +
     `<div class="row"><span class="t">Rebuild data</span><button class="btn" data-act="rebuild"${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? ' disabled' : ''}>${(dyn().save && dyn().save.rebuild && dyn().save.rebuild.running) ? 'Rebuilding...' : 'Rebuild now'}</button><span class="s" id="rebuild-status">${esc(rebuildStatusText())}</span></div>` +
     `<div class="row"><span class="t">Data</span><span class="s" style="grid-column:auto;color:var(--text)">${meta.actors || 0} actors · ${meta.armor || 0} armor · ${meta.compendium || 0} compendium · ${meta.collectibles || 0} collectibles</span><span class="s">Built from your game on ${esc(built)}. Rebuild after a game update or to refresh icons, maps, and item data.</span></div>` +
@@ -3149,12 +3172,17 @@ function renderStatusLine() {
     el.innerHTML = '<span class="spin"></span>Scanning save…';
   } else if (sv.error) {
     el.innerHTML = `<span class="warn">The game is writing the save. Trying again.</span>`;
+  } else if (sv.live === 'on') {
+    const slot = sv.slot ? sv.slot.replace('_', ' ') : 'save';
+    el.innerHTML = `${esc(slot)}, <b>live memory</b> · ${ago(sv.mtime)}`;
   } else {
     const next = sv.next_scan ? Math.max(0, Math.ceil(sv.next_scan - Date.now() / 1000)) : null;
     const slot = sv.slot ? sv.slot.replace('_', ' ') : 'save';
     el.innerHTML = `${esc(slot)}, saved ${ago(sv.mtime)}${next !== null ? ` · next check in ${next}s` : ''}`;
   }
-  hint.textContent = 'Read-only save mode · refreshes when the game saves';
+  hint.textContent = sv.live === 'on'
+    ? 'Read-only live memory · updates while the game runs'
+    : 'Read-only save mode · refreshes when the game saves';
 }
 
 /* ------------------------------------------------------------------ static events */
@@ -3516,6 +3544,14 @@ document.addEventListener('click', (e) => {
   }
   if (t.dataset.act === 'reset-filters') { resetFilters(); openSettings(false); return; }
   if (t.dataset.act === 'refresh') { call('refresh'); return; }
+  if (t.dataset.act === 'launch-game') {
+    t.disabled = true;
+    t.textContent = 'Launching...';
+    call('launch_game').then((ok) => {
+      if (!ok) renderSettings();
+    });
+    return;
+  }
   if (t.dataset.act === 'rebuild') {
     S.rebuildStarted = true;
     t.disabled = true;
